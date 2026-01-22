@@ -2,11 +2,12 @@
   "rewrites": [
     {
       "source": "/.lp",
-      "destination": "https://yoeyarv3-default-rtdb.firebaseio.com/.lp"
+      "destination": "https://yoeyarv3-default-rtdb.asia-southeast1.firebasedatabase.app/.lp"
     },
     {
       "source": "/:path*.json",
-      "destination": "https://yoeyarv3-default-rtdb.firebaseio.com/:path*.json"
+      "destination": "https://yoeyarv3-default-rtdb.asia-southeast1.firebasedatabase.app/:path*.json"
     }
   ]
 }
+
