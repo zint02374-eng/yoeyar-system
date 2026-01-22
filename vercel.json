@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/yoeyar-db/:path*",
+      "destination": "https://yoeyarv3-default-rtdb.firebaseio.com/:path*"
+    }
+  ]
+}

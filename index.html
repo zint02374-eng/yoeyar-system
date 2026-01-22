@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Yoeyar System | V22.12 Persistent DB</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Pyidaungsu:wght@300;400;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-app-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/firebase@10.7.1/firebase-database-compat.js"></script>
+
+    <style>
+        body { 
+            font-family: 'Inter', 'Pyidaungsu', sans-serif; 
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            min-height: 100vh;
+            color: #334155;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .btn-3d { transition: transform 0.1s, box-shadow 0.1s; border-bottom-width: 4px; }
+        .btn-3d:active { transform: translateY(2px); border-bottom-width: 0px; margin-top: 2px; margin-bottom: -2px; }
+        .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.5); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2); }
+        .input-3d { background: #f8fafc; box-shadow: inset 2px 2px 5px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; transition: all 0.2s; }
+        .input-3d:focus { background: #ffffff; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
+        .svc-card { transition: all 0.2s; border-bottom: 3px solid #e2e8f0; }
+        .peer:checked + .svc-card { background: #eff6ff; border-color: #3b82f6; color: #1d4ed8; transform: translateY(2px); border-bottom-width: 0; margin-bottom: 3px; }
+        .df-btn.active { background-color: #1e293b; color: white; }
+        .badge-done { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+        .assign-btn { transition: all 0.2s; border: 1px solid #e2e8f0; }
+        .assign-btn.active { background: #1e293b; color: white; border-color: #0f172a; transform: scale(1.05); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .modal-enter { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="pb-28 text-slate-700">
+
+    <div id="loginScreen" class="hidden fixed inset-0 z-[100] flex flex-col justify-center items-center p-4 bg-slate-900">
+        <div class="glass-panel rounded-[2rem] p-6 w-full max-w-sm relative z-10 flex flex-col items-center shadow-2xl">
+            <div class="w-20 h-20 bg-gradient-to-br from-blue-600 to-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg mb-4 transform -rotate-3 border-4 border-white/20"><i class="fas fa-cube text-3xl"></i></div>
+            <h2 class="text-2xl font-black text-slate-800 tracking-tight">YOEYAR</h2>
+            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-6">System V22.12</p>
+            <div class="w-full space-y-4">
+                <div class="group">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-2 mb-1 block">Identity</label>
+                    <select id="loginUser" class="input-3d w-full pl-4 pr-10 py-3.5 rounded-xl font-bold text-slate-700 outline-none appearance-none text-sm"></select>
+                </div>
+                <div class="group">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-2 mb-1 block">Security PIN</label>
+                    <input type="password" id="loginPass" inputmode="numeric" placeholder="••••" class="input-3d w-full pl-4 pr-4 py-3.5 rounded-xl font-bold text-slate-700 outline-none tracking-widest text-xl text-center">
+                </div>
+                <button onclick="attemptLogin()" class="btn-3d w-full bg-slate-800 border-slate-900 text-white py-4 rounded-xl font-bold text-sm shadow-xl mt-2 hover:bg-slate-900">ACCESS SYSTEM</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="appContainer" class="hidden min-h-screen flex flex-col relative z-10">
+        <header class="bg-white/90 backdrop-blur-md border-b border-white/20 sticky top-0 z-50 shadow-sm">
+            <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
+                <div class="flex items-center gap-2 cursor-pointer" onclick="location.reload()">
+                    <div class="bg-gradient-to-tr from-blue-600 to-indigo-600 text-white w-8 h-8 flex items-center justify-center rounded-lg shadow-md"><i class="fas fa-cube text-sm"></i></div>
+                    <div><h1 class="text-lg font-black text-slate-800 tracking-tight leading-none">YOEYAR</h1></div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div id="syncStatus" class="w-3 h-3 rounded-full bg-red-500 animate-pulse border-2 border-white shadow-sm" title="Cloud Status"></div>
+                    <div class="flex bg-slate-100 p-1 rounded-xl gap-1 overflow-x-auto">
+                        <button onclick="switchTab('queue')" id="tab-queue" class="tab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all bg-white shadow-sm text-slate-800"><i class="fas fa-list"></i> <span class="hidden sm:inline">List</span></button>
+                        <button onclick="switchTab('done')" id="tab-done" class="tab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all text-slate-500 hover:bg-white"><i class="fas fa-check-double"></i> <span class="hidden sm:inline">Done</span></button>
+                        <button onclick="switchTab('new')" id="tab-new" class="tab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all text-slate-500 hover:bg-white"><i class="fas fa-plus"></i> <span class="hidden sm:inline">New</span></button>
+                        <button onclick="switchTab('stock')" id="tab-stock" class="tab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all text-slate-500 hover:bg-white"><i class="fas fa-boxes"></i> <span class="hidden sm:inline">Stock</span></button>
+                        <button onclick="switchTab('daily')" id="tab-daily" class="tab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all text-slate-500 hover:bg-white"><i class="fas fa-clipboard-check"></i></button>
+                        <button onclick="switchTab('report')" id="tab-report" class="tab-btn px-3 py-2 rounded-lg text-xs font-bold transition-all text-slate-500 hover:bg-white"><i class="fas fa-chart-pie"></i></button>
+                        <button onclick="switchTab('admin')" id="tab-admin" class="tab-btn hidden px-3 py-2 rounded-lg text-xs font-bold text-slate-500 hover:bg-white"><i class="fas fa-cog"></i></button>
+                    </div>
+                    <button onclick="logout()" class="w-9 h-9 flex items-center justify-center bg-white border border-slate-200 text-slate-400 rounded-lg shadow-sm"><i class="fas fa-power-off"></i></button>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-5xl mx-auto w-full p-4 flex-grow">
+            <div id="view-queue" class="space-y-4">
+                <div class="glass-panel p-3 rounded-2xl sticky top-20 z-40 flex flex-col gap-3">
+                    <div class="flex gap-2">
+                        <div class="relative flex-grow">
+                            <i class="fas fa-search absolute left-3 top-3 text-slate-400"></i>
+                            <input type="text" id="searchInput" onkeyup="renderQueue()" data-ph="search_ph" placeholder="Search Pending..." class="input-3d w-full pl-9 pr-3 py-2.5 rounded-xl text-sm font-bold">
+                        </div>
+                        <div class="relative w-1/3">
+                            <select id="sortBy" onchange="renderQueue()" class="input-3d w-full pl-2 pr-6 py-2.5 rounded-xl text-xs font-bold text-slate-600 appearance-none">
+                                <option value="due">⏰ Due</option>
+                                <option value="newest">📅 New</option>
+                            </select>
+                            <i class="fas fa-sort absolute right-2 top-3 text-slate-400 text-xs pointer-events-none"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center px-2 text-white">
+                    <span class="text-xs font-bold opacity-70">Pending Jobs</span>
+                </div>
+                <div id="queueList" class="grid grid-cols-1 gap-3 pb-20"></div>
+            </div>
+
+            <div id="view-done" class="hidden space-y-4">
+                <div class="glass-panel p-3 rounded-2xl sticky top-20 z-40 flex flex-col gap-3">
+                    <div class="flex items-center justify-between">
+                        <h2 class="font-bold text-slate-700 ml-2"><i class="fas fa-check-double text-green-500"></i> Marked Done</h2>
+                    </div>
+                    <div class="flex gap-2 bg-slate-100 p-1 rounded-xl">
+                        <button onclick="setDoneFilter('all')" id="df-all" class="df-btn active flex-1 py-2 rounded-lg text-xs font-bold transition-all" data-lang="filter_all">All</button>
+                        <button onclick="setDoneFilter('unpaid')" id="df-unpaid" class="df-btn flex-1 py-2 bg-transparent text-slate-500 rounded-lg text-xs font-bold transition-all" data-lang="filter_unpaid">Unpaid</button>
+                        <button onclick="setDoneFilter('paid')" id="df-paid" class="df-btn flex-1 py-2 bg-transparent text-slate-500 rounded-lg text-xs font-bold transition-all" data-lang="filter_paid">Paid</button>
+                    </div>
+                </div>
+                <div id="doneList" class="grid grid-cols-1 gap-3 pb-20"></div>
+            </div>
+
+            <div id="view-stock" class="hidden space-y-4">
+                <div class="glass-panel p-5 rounded-3xl">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-xl font-black text-slate-800 flex items-center gap-2">
+                            <i class="fas fa-boxes text-orange-500"></i> Stock Inventory
+                        </h2>
+                        <button onclick="addNewStockItem()" class="bg-slate-800 text-white px-3 py-2 rounded-lg text-[10px] font-bold shadow-lg">
+                            <i class="fas fa-plus"></i> ADD NEW
+                        </button>
+                    </div>
+                    <div id="stockListContainer" class="space-y-3 pb-20"></div>
+                </div>
+            </div>
+
+            <div id="view-daily" class="hidden space-y-4">
+                <div class="glass-panel p-6 rounded-3xl relative overflow-hidden">
+                    <div class="absolute top-0 right-0 p-4 opacity-10"><i class="fas fa-clipboard-check text-6xl text-blue-600"></i></div>
+                    <h2 class="text-2xl font-black text-slate-800 mb-1" id="dailyStaffName">My Daily Log</h2>
+                    <div class="text-sm font-bold text-slate-400 mb-4" id="dailyDateStr"></div>
+                    <div class="bg-slate-800 text-white p-4 rounded-xl shadow-lg mb-6 flex justify-between items-end">
+                        <div><div class="text-[10px] font-bold uppercase text-slate-400">Accomplished by Me</div><div class="text-2xl font-black" id="dailyCount">0</div></div>
+                        <div class="text-right">
+                            <div class="text-[10px] font-bold uppercase text-slate-400">Total Value</div>
+                            <div class="text-2xl font-black text-green-400" id="dailyTotalDisplay"></div>
+                        </div>
+                    </div>
+                    <h3 class="font-bold text-slate-700 mb-3 text-sm flex items-center gap-2"><i class="fas fa-hourglass-half text-orange-500"></i> To Do / Scheduled Today</h3>
+                    <div id="dailyPoolList" class="space-y-2 mb-8"></div>
+                    <h3 class="font-bold text-slate-700 mb-3 text-sm flex items-center gap-2"><i class="fas fa-check-circle text-green-500"></i> My Accomplished Jobs</h3>
+                    <div id="dailyMyList" class="space-y-2 pb-10"></div>
+                </div>
+            </div>
+
+            <div id="view-report" class="hidden space-y-4">
+                 <div class="glass-panel p-5 rounded-3xl">
+                    <h2 class="text-xl font-black text-slate-800 mb-4 flex items-center gap-2"><i class="fas fa-chart-pie text-blue-500"></i> Monthly Staff Report</h2>
+                    <div class="space-y-6">
+                        <div>
+                            <h3 class="text-xs font-bold text-slate-400 uppercase mb-2 ml-1">Jobs Added By (Order Taker)</h3>
+                            <div id="reportAddedList" class="space-y-2"></div>
+                        </div>
+                        <div class="border-t border-slate-100 pt-4">
+                            <h3 class="text-xs font-bold text-green-600 uppercase mb-2 ml-1">Jobs Completed By (Worker)</h3>
+                            <div id="reportDoneList" class="space-y-2"></div>
+                        </div>
+                     </div>
+                 </div>
+            </div>
+
+            <div id="view-new" class="hidden">
+                <div class="glass-panel p-5 rounded-3xl">
+                    <form id="orderForm" class="space-y-6" data-edit-id="">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="col-span-2 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                <label class="text-[10px] font-bold text-slate-400 uppercase ml-1 mb-1 block">Staff (Order Taker)</label>
+                                <select id="orderStaff" class="input-3d w-full p-2 rounded-lg font-bold text-slate-700 text-sm outline-none"></select>
+                            </div>
+
+                            <div class="col-span-2 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                                <label class="text-[10px] font-bold text-slate-400 uppercase ml-1 mb-2 block">Job Assigned To (လုပ်ဆောင်မည့်သူ)</label>
+                                <div id="assigneeContainer" class="flex flex-wrap gap-2"></div>
+                                <input type="hidden" id="assignedToInput">
+                            </div>
+
+                            <div><label class="text-[10px] font-bold text-slate-500 uppercase ml-1" data-lang="cust_name">Customer</label><input type="text" id="clientName" class="input-3d w-full p-3 rounded-xl font-bold text-slate-800"></div>
+                            <div><label class="text-[10px] font-bold text-slate-500 uppercase ml-1" data-lang="due">Due Date</label><input type="datetime-local" id="dueDate" class="input-3d w-full p-3 rounded-xl font-bold text-slate-600"></div>
+                        </div>
+
+                        <div class="bg-blue-50 border border-blue-100 p-3 rounded-xl flex flex-col gap-3 shadow-inner">
+                            <div class="flex items-center gap-2">
+                                <label class="btn-3d bg-white text-blue-600 border border-blue-200 w-14 h-12 flex flex-col items-center justify-center rounded-xl cursor-pointer shadow-sm active:shadow-none hover:bg-blue-50 transition-colors">
+                                    <i class="fas fa-camera text-lg mb-0.5"></i>
+                                    <span class="text-[8px] font-bold uppercase">Cam</span>
+                                    <input type="file" accept="image/*" capture="environment" class="hidden" onchange="processPhotos(this)">
+                                </label>
+                                <label class="btn-3d bg-white text-indigo-600 border border-indigo-200 w-14 h-12 flex flex-col items-center justify-center rounded-xl cursor-pointer shadow-sm active:shadow-none hover:bg-indigo-50 transition-colors">
+                                    <i class="fas fa-images text-lg mb-0.5"></i>
+                                    <span class="text-[8px] font-bold uppercase">Gal</span>
+                                    <input type="file" accept="image/*" multiple class="hidden" onchange="processPhotos(this)">
+                                </label>
+                                <div class="ml-2">
+                                    <div class="text-[10px] font-bold text-slate-700 uppercase tracking-wide">Attach Photos</div>
+                                    <div id="photoStatus" class="text-[9px] text-slate-400 font-bold">Use Camera or Gallery</div>
+                                </div>
+                                <button type="button" onclick="clearPhoto()" class="ml-auto text-xs font-bold text-red-400 border border-red-200 bg-white px-2 py-1 rounded-lg hover:bg-red-50">Clear</button>
+                            </div>
+                            <div id="photoGallery" class="hidden grid grid-cols-4 gap-2"></div>
+                        </div>
+
+                        <div><label class="text-[10px] font-bold text-slate-500 uppercase ml-1 mb-2 block" data-lang="services">Services</label><div id="svcCheckboxes" class="grid grid-cols-3 sm:grid-cols-4 gap-2"></div></div>
+                        <div id="dynamicPanels" class="space-y-3"></div>
+                        <div class="bg-slate-800 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
+                            <div class="flex justify-between items-end mb-4 border-b border-white/10 pb-4"><span class="text-slate-400 text-xs font-bold uppercase" data-lang="total">Total</span><span id="grandTotal" class="text-3xl font-black">0</span></div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div><label class="text-[9px] text-slate-400 font-bold uppercase" data-lang="advance">Advance</label><input type="number" id="debit" placeholder="0" oninput="calcOrder()" class="w-full bg-transparent text-green-400 text-xl font-bold border-b border-slate-600 focus:border-green-500 outline-none"></div>
+                                <div class="text-right"><label class="text-[9px] text-slate-400 font-bold uppercase" data-lang="balance">Balance</label><div id="balance" class="text-xl font-black text-red-400">0</div></div>
+                            </div>
+                        </div>
+                        <div class="flex gap-2 pt-2">
+                             <button type="button" onclick="cancelEdit()" id="cancelBtn" data-lang="cancel_btn" class="hidden flex-1 btn-3d bg-slate-100 text-slate-600 border-slate-200 py-3 rounded-xl font-bold">Cancel</button>
+                             <button type="button" onclick="submitOrder()" id="saveBtn" data-lang="save" class="flex-[2] btn-3d btn-blue py-3 rounded-xl font-bold text-lg shadow-lg">Save Order</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div id="view-admin" class="hidden space-y-6 pb-20">
+                <div class="glass-panel p-5 rounded-3xl">
+                    <h2 class="text-xl font-black text-slate-800 mb-6 flex items-center gap-2"><i class="fas fa-tools text-slate-500"></i> Admin Tools</h2>
+                    <div class="space-y-3">
+                        <button onclick="exportData('daily')" class="w-full bg-blue-50 text-blue-600 font-bold py-3 rounded-xl border border-blue-100 hover:bg-blue-100 flex items-center justify-center gap-2"><i class="fas fa-file-csv"></i> Export Daily Report (CSV)</button>
+                        <button onclick="exportData('monthly')" class="w-full bg-green-50 text-green-600 font-bold py-3 rounded-xl border border-green-100 hover:bg-green-100 flex items-center justify-center gap-2"><i class="fas fa-file-excel"></i> Export Monthly Data (CSV)</button>
+                        
+                        <div class="relative group">
+                            <button class="w-full bg-purple-50 text-purple-600 font-bold py-3 rounded-xl border border-purple-100 hover:bg-purple-100 flex items-center justify-center gap-2">
+                                <i class="fas fa-file-import"></i> Import from CSV
+                                <input type="file" accept=".csv" onchange="importCSV(this)" class="absolute inset-0 opacity-0 cursor-pointer">
+                            </button>
+                            <div class="text-[9px] text-center text-purple-400 mt-1">⚠️ Restores Name, Price, Date & Summary only.</div>
+                        </div>
+
+                        <button onclick="pruneOldData()" class="w-full bg-red-50 text-red-600 font-bold py-3 rounded-xl border border-red-100 hover:bg-red-100 flex items-center justify-center gap-2"><i class="fas fa-trash"></i> Delete Orders > 60 Days</button>
+                        <button onclick="cleanUpHeavyData()" class="w-full bg-orange-50 text-orange-600 font-bold py-3 rounded-xl border border-orange-100 hover:bg-orange-100 flex items-center justify-center gap-2"><i class="fas fa-database"></i> Clean Orphaned Images</button>
+                    </div>
+                </div>
+                <div class="glass-panel p-5 rounded-3xl">
+                    <h2 class="text-xl font-black text-slate-800 mb-6 flex items-center gap-2"><i class="fas fa-sliders-h text-orange-500"></i> Price Configuration</h2>
+                    <div id="adminMatrixContainer" class="space-y-6"></div>
+                </div>
+                <div class="fixed bottom-20 left-0 right-0 px-6 flex justify-center z-50 pointer-events-none">
+                    <button onclick="saveAdminSettings()" id="adminSaveBtn" class="pointer-events-auto btn-3d bg-slate-900 text-white px-6 py-3 rounded-xl font-bold shadow-xl border-slate-950 flex items-center gap-2"><i class="fas fa-save"></i> Save Changes</button>
+                </div>
+            </div>
+        </main>
+
+        <footer class="bg-white/90 backdrop-blur border-t border-slate-200 py-3 mt-auto flex justify-center gap-4 fixed bottom-0 w-full z-30">
+            <button onclick="changeLang('en')" id="lang-en" class="text-[10px] font-bold px-3 py-1 rounded-full bg-slate-100 border text-slate-500">English</button>
+            <button onclick="changeLang('my')" id="lang-my" class="text-[10px] font-bold px-3 py-1 rounded-full bg-slate-100 border text-slate-500">Myanmar</button>
+        </footer>
+    </div>
+
+    <div id="jobModal" class="hidden fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm">
+        <div class="bg-white rounded-3xl w-full max-w-sm p-0 modal-enter shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div class="bg-slate-100 p-4 border-b border-slate-200 flex justify-between items-center shrink-0">
+                <h3 class="font-black text-slate-700 text-lg" data-lang="job_details">Job Details</h3>
+                <div class="flex gap-2">
+                    <button onclick="speakCurrentJob()" class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 hover:bg-blue-200 shadow-sm">
+                        <i class="fas fa-volume-up"></i>
+                    </button>
+                    <button onclick="closeModal()" class="w-8 h-8 bg-white rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 shadow-sm"><i class="fas fa-times"></i></button>
+                </div>
+            </div>
+            <div class="p-5 space-y-4 overflow-y-auto">
+                <div id="modalLoading" class="hidden text-center text-xs font-bold text-blue-500 py-4"><i class="fas fa-spinner fa-spin"></i> Loading High-Res Images...</div>
+                <div id="modalPhotoArea" class="hidden w-full h-48 bg-slate-100 rounded-xl bg-cover bg-center border border-slate-200 mb-2 shadow-inner relative">
+                    <a id="downloadBtn" href="#" download="photo.jpg" class="absolute bottom-2 right-2 bg-white/90 p-2 rounded-lg text-slate-800 text-xs font-bold shadow-sm hover:bg-white flex items-center gap-1"><i class="fas fa-download"></i> Save</a>
+                </div>
+                <div id="modalGalleryArea" class="hidden grid grid-cols-3 gap-2 mb-2"></div>
+                
+                <div class="text-center">
+                    <h2 id="modalName" class="text-2xl font-black text-slate-800 leading-tight"></h2>
+                    <div id="modalStaff" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1"></div>
+                     <div id="modalAssigned" class="hidden text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full inline-block mt-1"></div>
+                    <div id="modalStatusBadge" class="mt-2 inline-block px-3 py-1 rounded-full text-[10px] font-bold uppercase"></div>
+                </div>
+                <div class="flex justify-between items-center bg-red-50 p-3 rounded-xl border border-red-100">
+                    <span class="text-xs font-bold text-red-800 uppercase" data-lang="due">Due Date</span>
+                    <span id="modalDate" class="text-lg font-black text-red-600"></span>
+                </div>
+                <div id="modalDetails" class="space-y-2 max-h-40 overflow-y-auto"></div>
+                <div id="modalNotesBox" class="hidden bg-yellow-50 p-3 rounded-xl border border-yellow-100 text-sm text-yellow-800 font-medium">
+                    <div class="text-[10px] font-bold uppercase mb-1 opacity-70">Note</div>
+                    <div id="modalNotes"></div>
+                </div>
+                <div class="flex justify-between items-end pt-2 border-t border-slate-100">
+                    <div class="text-xs text-slate-400 font-bold uppercase" data-lang="balance">Balance Due</div>
+                    <div id="modalBalance" class="text-2xl font-black"></div>
+                </div>
+                <button onclick="closeModal()" class="btn-3d bg-slate-100 text-slate-600 border-slate-200 w-full py-3 rounded-xl font-bold text-sm mt-2" data-lang="close">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = { 
+            apiKey: "AIzaSyAZV5Cjjdc8D13i5VDPcmHezzijnmbxSFk", 
+            authDomain: "yoeyarv3.firebaseapp.com", 
+            
+            // --- VPN-FREE DOMAIN PROXY ---
+            // This connects to your custom Vercel domain, which forwards
+            // the data to Firebase secretly.
+            databaseURL: "https://app.yoeyargroup.online/yoeyar-db", 
+            
+            projectId: "yoeyarv3", 
+            storageBucket: "yoeyarv3.firebasestorage.app", 
+            messagingSenderId: "879410122462", 
+            appId: "1:879410122462:web:fb39b4d2f6c856bb2c3c4f" 
+        };
+
+        if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
+        
+        // --- FORCE LONG POLLING (REQUIRED FOR PROXIES) ---
+        // This ensures the app uses simple HTTP requests instead of
+        // WebSockets, which makes the connection stable through Vercel.
+        try {
+            firebase.database().INTERNAL.forceLongPolling();
+            console.log("Forced Long Polling for Proxy Support");
+        } catch (e) {
+            console.log("Long Polling force failed:", e);
+        }
+
+        const db = firebase.database();
+
+        // --- BACKGROUND AUDIO HACK ---
+        const SILENT_AUDIO = "data:audio/mp3;base64,SUQzBAAAAAABAFRYWFgAAAASAAADbWFqb3JfYnJhbmQAbXA0MgBUWFhYAAAAEQAAA21pbm9yX3ZlcnNpb24AMABUWFhYAAAAHAAAA2NvbXBhdGlibGVfYnJhbmRzAGlzb21tcDQyAFRTU0UAAAAPAAADTGF2ZjU3LjU2LjEwMAAAAAAAAAAAAAAA//uQZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWgAAAA0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//uQZAAP8AAAAAAAAAAASDkkAADxAAAAAAAAAAAAAA//uQZAAP8AAAAAAAAAAASDkkAADxAAAAAAAAAAAAAA//uQZAAP8AAAAAAAAAAASDkkAADxAAAAAAAAAAAAAA";
+        let keepAliveAudio = new Audio(SILENT_AUDIO);
+        keepAliveAudio.loop = true;
+        
+        let announcerInterval = null;
+        let isAnnouncerActive = false;
+
+        const LocalDB = {
+            dbName: 'yoeyar_offline_db',
+            storeName: 'orders',
+            dbVersion: 1,
+            open: function() { return new Promise((resolve, reject) => { const request = indexedDB.open(this.dbName, this.dbVersion); request.onupgradeneeded = (e) => { const db = e.target.result; if (!db.objectStoreNames.contains(this.storeName)) { db.createObjectStore(this.storeName, { keyPath: 'id' }); } }; request.onsuccess = (e) => resolve(e.target.result); request.onerror = (e) => reject(e); }); },
+            save: async function(order) { const db = await this.open(); return new Promise((resolve, reject) => { const tx = db.transaction(this.storeName, 'readwrite'); const store = tx.objectStore(this.storeName); store.put(order); tx.oncomplete = () => resolve(); tx.onerror = (e) => reject(e); }); },
+            getAll: async function() { const db = await this.open(); return new Promise((resolve, reject) => { const tx = db.transaction(this.storeName, 'readonly'); const store = tx.objectStore(this.storeName); const request = store.getAll(); request.onsuccess = () => resolve(request.result); request.onerror = (e) => reject(e); }); },
+            remove: async function(id) { const db = await this.open(); return new Promise((resolve, reject) => { const tx = db.transaction(this.storeName, 'readwrite'); const store = tx.objectStore(this.storeName); store.delete(id); tx.oncomplete = () => resolve(); tx.onerror = (e) => reject(e); }); }
+        };
+
+        const ACCOUNTS = [ { id: 'admin', name: 'Admin', pass: '8888', role: 'admin' }, { id: 'staff1', name: 'နှင်းအိလွင်', pass: '1111', role: 'common' }, { id: 'staff2', name: 'ဝေဝေ', pass: '1111', role: 'common' }, { id: 'staff3', name: 'အိမ့်မှူး', pass: '1111', role: 'common' }, { id: 'common', name: 'Shop Common', pass: '0000', role: 'common' } ];
+        const ASSIGNEES = ['မသင်း', 'ဇင်သူ', 'နှင်းအိလွင်', 'အိမ့်မှူး', 'ဝေဝေ'];
+
+        let currentUser = null; 
+        let currentPhotoList = []; 
+        let doneFilter = 'all';
+        let autoDownloadedToday = false;
+        let currentDetailsId = null;
+        
+        const SVCS = { photo: 'ဓါတ်ပုံ', sticker: 'စတစ်ကာ', vinyl: 'ဗီနိုင်း', stamp: 'တံဆိပ်တုံး', invite: 'ဖိတ်စာ', copy: 'မိတ္တူ', card: 'လိပ်စာကတ်', voucher: 'ဘောင်ချာ', letter: 'စာလုံးဖောက်', lamin: 'ကတ်လောင်း', typing: 'စာစီ', misc_custom: 'အခြား' };
+        const SVC_ICONS = { photo: 'camera', sticker: 'sticky-note', vinyl: 'scroll', stamp: 'stamp', invite: 'envelope', copy: 'copy', card: 'id-card', voucher: 'receipt', letter: 'font', lamin: 'layer-group', typing: 'keyboard', misc_custom: 'box-open' };
+        
+        const PHOTO_SIZES = ['2 Up', '4 Up', '4 x 6', '5 x 7', '6 x 8', 'A4', '10 x 14', 'A3', '12 x 18', '20 x 30']; const PHOTO_TYPES = ['ပုံသီးသန့်', 'ဘောင်ပါ', 'ကတ်လောင်း']; const FRAME_TYPES = ['ဘောင်သေး', 'ဘောင်လတ်', 'ဘောင်ကြီး', 'သစ်သားဘောင်'];
+        const STICKER_SIZES = ['A4', 'A3', 'Custom Size']; const STICKER_TYPES = ['Normal', 'Reflective', 'Clear']; const INVITE_SIZES = ['4 x 6', 'A4 နှစ်ချိုး', 'A4']; const INVITE_TYPES = ['အိမ်သစ်တက်', 'မွေးနေ့', 'တရားနာ', 'ကထိန်', 'မင်္ဂလာဆောင်', 'ရှင်ပြု']; const COPY_SIZES = ['A4', 'Legal', 'A3']; const COPY_TYPES = ['B&W', 'Color']; const COPY_SIDES = ['1side', 'Double']; const LAMIN_SIZES = ['A4', 'A3', 'Card Size'];
+        
+        let appData = { prices: {}, orders: [], stock: [] }; 
+        const LANG = { en: { list: "List", new: "New", all: "All", unpaid: "Unpaid", completed: "Completed", advance: "Advance", balance: "Balance", who: "Processed By", save: "Save Order", update: "Update Order", total: "Total", due: "Due Date", cust_name: "Customer", services: "Services", search_ph: "Search...", cancel_btn: "Cancel", config_title: "Configuration", save_changes: "Save Changes", job_details: "Job Details", close: "Close", filter_all: "All", filter_unpaid: "Unpaid", filter_paid: "Completed", sort_new: "📅 Newest", sort_old: "📅 Oldest", sort_due: "⏰ Due Date", sort_staff: "👤 Staff", note_ph: "Add optional note...", settle_confirm: "Settle this job?", delete_confirm: "Archive this job? (Move to History)", total: "Total" }, my: { list: "အမှာစာရင်း", new: "အသစ်", all: "အားလုံး", unpaid: "ကျန်ငွေရှိ", completed: "ရှင်းပြီး", advance: "စရန်", balance: "ကျန်ငွေ", who: "တာဝန်ခံ ဝန်ထမ်း", save: "သိမ်းဆည်းမည်", update: "ပြင်ဆင်မည်", total: "စုစုပေါင်း", due: "ပြီးစီးရမည့်ရက်", cust_name: "ဝယ်ယူသူ", services: "ဝန်ဆောင်မှုများ", search_ph: "ရှာဖွေရန်...", cancel_btn: "မလုပ်တော့ပါ", config_title: "ဈေးနှုန်းသတ်မှတ်ချက်", save_changes: "သိမ်းဆည်းမည်", job_details: "အသေးစိတ်", close: "ပိတ်မည်", filter_all: "အားလုံး", filter_unpaid: "ကျန်ငွေရှိ", filter_paid: "ရှင်းပြီး", sort_new: "📅 အသစ်ဆုံး", sort_old: "📅 အဟောင်းဆုံး", sort_due: "⏰ ရက်စွဲအလိုက်", sort_staff: "👤 ဝန်ထမ်းအလိုက်", note_ph: "မှတ်ချက်ရေးရန်...", settle_confirm: "စာရင်းပိတ်မလား?", delete_confirm: "စာရင်းဖျက်ပြီး သိမ်းဆည်းမလား?", total: "စုစုပေါင်း" } };
+
+        window.onload = function() { populateLogin(); const savedUser = localStorage.getItem('yoeyar_user'); ensureDataStructure(); if (savedUser) { currentUser = JSON.parse(savedUser); startSystem(); } else { document.getElementById('loginScreen').classList.remove('hidden'); } };
+
+        function ensureDataStructure() { 
+            if(!appData.orders) appData.orders = []; 
+            if(!appData.prices) appData.prices = {}; 
+            if(!appData.stock) appData.stock = []; 
+            ['photo','sticker','vinyl','stamp','invite','copy','card','voucher','letter','lamin','misc'].forEach(k => { if(!appData.prices[k]) appData.prices[k] = {}; }); 
+            if(!appData.prices.sticker.sqft_normal) appData.prices.sticker.sqft_normal = 0; if(!appData.prices.sticker.sqft_reflect) appData.prices.sticker.sqft_reflect = 0; if(!appData.prices.sticker.cutting) appData.prices.sticker.cutting = 0; if(!appData.prices.vinyl.pipe) appData.prices.vinyl.pipe = 0; if(!appData.prices.vinyl.eyelet) appData.prices.vinyl.eyelet = 0; if(!appData.prices.stamp.circle) appData.prices.stamp.circle = 0; if(!appData.prices.stamp.rect) appData.prices.stamp.rect = 0; if(!appData.prices.misc.typing) appData.prices.misc.typing = 0; 
+        }
+        
+        function populateLogin() { document.getElementById('loginUser').innerHTML = ACCOUNTS.map(a => `<option value="${a.id}">${a.role==='admin'?'🛡️ ':'👤 '}${a.name}</option>`).join(''); }
+        function populateOrderStaff() { document.getElementById('orderStaff').innerHTML = ACCOUNTS.map(a => `<option value="${a.name}" ${currentUser && currentUser.name === a.name ? 'selected' : ''}>${a.name}</option>`).join(''); }
+        function renderAssigneeButtons() { const container = document.getElementById('assigneeContainer'); container.innerHTML = ASSIGNEES.map(name => `<button type="button" onclick="selectAssignee('${name}')" data-assignee="${name}" class="assign-btn bg-white text-slate-500 font-bold text-xs py-2 px-3 rounded-xl shadow-sm hover:bg-slate-50">${name}</button>`).join(''); }
+        function selectAssignee(name) { document.getElementById('assignedToInput').value = name; document.querySelectorAll('.assign-btn').forEach(btn => { if(btn.dataset.assignee === name) { btn.classList.add('active'); } else { btn.classList.remove('active'); } }); }
+
+        function startSystem() { 
+            document.getElementById('loginScreen').classList.add('hidden'); 
+            document.getElementById('appContainer').classList.remove('hidden'); 
+            applyLoginState(); populateOrderStaff(); renderForm(); renderAssigneeButtons(); 
+            
+            LocalDB.getAll().then(savedOrders => {
+                if(savedOrders && savedOrders.length > 0) {
+                     savedOrders.forEach(saved => {
+                        const exists = appData.orders.some(o => o.id === saved.orderData.id);
+                        if(!exists) appData.orders.push(saved.orderData);
+                     });
+                     console.log("Loaded " + savedOrders.length + " offline orders");
+                     renderQueue();
+                     syncOfflineData();
+                }
+            });
+            
+            renderQueue(); renderStock(); renderAdmin(); changeLang('my'); connectCloud(); 
+            window.addEventListener('online', syncOfflineData);
+            setInterval(checkAutoDownload, 60000);
+
+            // --- ADD AUTO ANNOUNCE BUTTON TO HEADER ---
+            addAnnounceButton();
+        }
+
+        function addAnnounceButton() {
+            const headerDiv = document.querySelector('#syncStatus').parentNode;
+            if(!document.getElementById('btn-announce')) {
+                const btn = document.createElement('button');
+                btn.id = 'btn-announce';
+                btn.className = "w-9 h-9 flex items-center justify-center bg-white border border-slate-200 text-slate-400 rounded-lg shadow-sm ml-2 transition-all";
+                btn.innerHTML = '<i class="fas fa-headset"></i>';
+                btn.onclick = toggleAnnouncer;
+                headerDiv.appendChild(btn);
+            }
+        }
+
+        function toggleAnnouncer() {
+            const btn = document.getElementById('btn-announce');
+            if (isAnnouncerActive) {
+                // STOP
+                isAnnouncerActive = false;
+                clearInterval(announcerInterval);
+                keepAliveAudio.pause();
+                btn.className = "w-9 h-9 flex items-center justify-center bg-white border border-slate-200 text-slate-400 rounded-lg shadow-sm ml-2 transition-all";
+                btn.innerHTML = '<i class="fas fa-headset"></i>';
+                speakText("Auto announcement stopped.");
+            } else {
+                // START
+                isAnnouncerActive = true;
+                keepAliveAudio.play().catch(e => console.log("Audio play failed (interaction needed first):", e));
+                
+                // Speak immediately to confirm
+                speakText("မင်္ဂလာပါ။ 10 မိနစ် တစ်ခါ သတိပေးပါမည်။"); // "Hello. I will warn you every 10 mins"
+                
+                btn.className = "w-9 h-9 flex items-center justify-center bg-blue-600 border border-blue-700 text-white rounded-lg shadow-lg ml-2 transition-all animate-pulse";
+                btn.innerHTML = '<i class="fas fa-volume-up"></i>';
+                
+                // Set 10 Minute Interval (600,000 ms)
+                announcerInterval = setInterval(announcePendingJobs, 600000);
+            }
+        }
+
+        function announcePendingJobs() {
+            if (!isAnnouncerActive) return;
+            
+            const pending = appData.orders.filter(o => !o.archived && !o.accomplished);
+            const count = pending.length;
+            
+            if (count === 0) {
+                speakText("မင်္ဂလာပါ။ လက်ကျန်အလုပ် မရှိပါ။"); // "Hello. No pending jobs."
+                return;
+            }
+
+            // Construct Burmese Sentence
+            let summary = `မင်္ဂလာပါ။ လက်ကျန်အလုပ် ${count} ခု ရှိပါသည်။ `;
+            const types = {};
+            pending.forEach(o => {
+                const s = o.summary.split(',')[0].trim();
+                types[s] = (types[s] || 0) + 1;
+            });
+            
+            // "Including: X..." -> "အသေးစိတ်မှာ... X..."
+            const typeText = Object.keys(types).map(k => `${types[k]} ${k}`).join(', ');
+            summary += `အသေးစိတ်မှာ... ${typeText} ဖြစ်ပါသည်။`;
+
+            speakText(summary);
+        }
+
+        // --- IMPROVED TEXT TO SPEECH (Prioritize Myanmar) ---
+        function speakText(text) {
+             if (!('speechSynthesis' in window)) return;
+             
+             window.speechSynthesis.cancel();
+             const utterance = new SpeechSynthesisUtterance(text);
+             
+             // 1. Get all available voices
+             const voices = window.speechSynthesis.getVoices();
+             
+             // 2. Try to find a Myanmar (Burmese) voice
+             let preferredVoice = voices.find(v => v.lang.includes("my-MM"));
+             
+             // 3. If no exact match, try broad match
+             if(!preferredVoice) preferredVoice = voices.find(v => v.lang.includes("my"));
+
+             if(preferredVoice) {
+                 utterance.voice = preferredVoice;
+                 utterance.lang = preferredVoice.lang;
+             } else {
+                 // Fallback: Force lang code even if voice obj not found
+                 utterance.lang = 'my-MM'; 
+             }
+             
+             utterance.rate = 1.0; 
+             window.speechSynthesis.speak(utterance);
+        }
+
+        // Manual Speak for specific job (Modal)
+        function speakCurrentJob() {
+            if (!('speechSynthesis' in window)) { return alert("Text-to-speech not supported."); }
+            if (window.speechSynthesis.speaking) { window.speechSynthesis.cancel(); return; }
+            
+            const name = document.getElementById('modalName').innerText;
+            const balance = document.getElementById('modalBalance').innerText;
+            
+            // "Name: [name]. Balance: [balance] Kyats."
+            let textToRead = `အမည် ${name} . ကျန်ငွေ ${balance} ကျပ် ဖြစ်ပါသည်။ `;
+            
+            if(currentDetailsId) {
+                const job = appData.orders.find(o => o.id === currentDetailsId);
+                if(job) {
+                     // "Details: ..." -> "အသေးစိတ် "
+                     textToRead += `အသေးစိတ် ${job.summary} . `;
+                     if(job.notes && job.notes.length > 0) {
+                         textToRead += `မှတ်ချက် ${job.notes} .`;
+                     }
+                }
+            }
+            speakText(textToRead);
+        }
+
+        function checkAutoDownload() { const now = new Date(); if (now.getHours() === 18 && now.getMinutes() >= 0 && now.getMinutes() < 2) { if (!autoDownloadedToday) { exportData('daily'); autoDownloadedToday = true; } } else { autoDownloadedToday = false; } }
+
+        function connectCloud() { 
+            const sync = document.getElementById('syncStatus'); 
+            if(sync) sync.className = "w-3 h-3 rounded-full bg-yellow-500 animate-pulse border-2 border-white shadow-sm"; 
+            
+            db.ref('yoeyar_cloud_data').child('orders').on('value', (snapshot) => { 
+                const data = snapshot.val(); 
+                if (data) { 
+                    const orderList = typeof data === 'object' && !Array.isArray(data) ? Object.values(data) : data;
+                    LocalDB.getAll().then(offlineItems => {
+                        const offlineOrders = offlineItems.map(q => q.orderData);
+                        appData.orders = [...orderList.filter(o => o !== null), ...offlineOrders];
+                        const uniqueOrders = []; const map = new Map();
+                        for (const item of appData.orders) { if(!map.has(item.id)){ map.set(item.id, true); uniqueOrders.push(item); } }
+                        appData.orders = uniqueOrders;
+                        renderQueue(); renderDoneList(); renderAdmin(); renderDaily(); 
+                        if(sync) sync.className = "w-3 h-3 rounded-full bg-green-500 shadow-sm border-2 border-white"; 
+                    });
+                } 
+            }, (error) => {
+                // ERROR HANDLING FOR VPN BLOCKS (Now routed through Vercel)
+                if(sync) sync.className = "w-3 h-3 rounded-full bg-red-600 border-2 border-white";
+                console.error("Database connection failed.", error);
+            }); 
+            
+            db.ref('yoeyar_cloud_data').child('stock').on('value', s => { if(s.val()){ appData.stock = Array.isArray(s.val()) ? s.val() : Object.values(s.val()); renderStock(); }});
+            db.ref('yoeyar_cloud_data').child('prices').on('value', s => { if(s.val()) appData.prices = s.val(); });
+        }
+
+        async function syncOfflineData() {
+            if (!navigator.onLine) return;
+            const offlineItems = await LocalDB.getAll();
+            if (offlineItems.length === 0) return;
+            const syncStatus = document.getElementById('syncStatus');
+            if(syncStatus) syncStatus.className = "w-3 h-3 rounded-full bg-blue-500 animate-ping border-2 border-white";
+            const item = offlineItems[0]; 
+            db.ref().update(item.updates).then(async () => {
+                await LocalDB.remove(item.id); 
+                const localOrder = appData.orders.find(o => o.id === item.orderData.id);
+                if(localOrder) localOrder.is_offline = false;
+                renderQueue(); syncOfflineData(); 
+            }).catch((error) => { console.error("Sync failed for " + item.id, error); });
+        }
+
+        function submitOrder() {
+            if(!currentUser) return alert("Login First"); const name = document.getElementById('clientName').value; if(!name) return alert("Name Required"); let staffName = document.getElementById('orderStaff').value; 
+            const assignedTo = document.getElementById('assignedToInput').value || "";
+            const summaryArr = []; const notesArr = []; const details = {};
+            Object.keys(SVCS).forEach(k => { if(document.getElementById('check_'+k)?.checked) { summaryArr.push(SVCS[k]); const n = document.getElementById('desc_'+k).value; if(n) notesArr.push(`${SVCS[k]}: ${n}`); details[k] = true; details[`desc_${k}`] = n; if(k==='photo') { details.p_sz = document.getElementById('p_sz').value; details.p_ty = document.getElementById('p_ty').value; details.p_fr = document.getElementById('p_fr').value; details.p_qty = document.getElementById('p_qty').value; } if(k==='sticker') { details.st_sz = document.getElementById('st_sz').value; details.st_ty = document.getElementById('st_ty').value; details.st_qty = document.getElementById('st_qty').value; details.st_cut = document.getElementById('st_cut').checked; details.st_roll = document.getElementById('st_roll').value; if(details.st_sz === 'Custom Size') { details.st_w = document.getElementById('st_w').value; details.st_h = document.getElementById('st_h').value; } } if(k==='vinyl') { details.v_ty = document.getElementById('v_ty').value; details.v_w = document.getElementById('v_w').value; details.v_h = document.getElementById('v_h').value; details.v_qty = document.getElementById('v_qty').value; details.v_pipe_ft = document.getElementById('v_pipe_ft').value; details.v_eyelet_qty = document.getElementById('v_eyelet_qty').value; } if(k==='stamp') { details.stamp_shape = document.getElementById('stamp_shape').value; details.stamp_mm = document.getElementById('stamp_mm').value; details.stamp_w = document.getElementById('stamp_w').value; details.stamp_h = document.getElementById('stamp_h').value; } if(k==='invite') { details.i_sz = document.getElementById('i_sz').value; details.i_ty = document.getElementById('i_ty').value; details.i_qty = document.getElementById('i_qty').value; } if(k==='copy') { details.c_sz = document.getElementById('c_sz').value; details.c_ty = document.getElementById('c_ty').value; details.c_si = document.getElementById('c_si').value; details.c_qty = document.getElementById('c_qty').value; } if(k==='typing') details.qty_typing = document.getElementById('qty_typing').value; if(k==='misc_custom') { details.mc_name = document.getElementById('mc_name').value; details.mc_size = document.getElementById('mc_size').value; details.mc_price = document.getElementById('mc_price').value; details.mc_qty = document.getElementById('mc_qty').value; } if(k==='card') { details.card_qty = document.getElementById('card_qty').value; details.card_price = document.getElementById('card_price').value; } if(k==='voucher') { details.vouch_qty = document.getElementById('vouch_qty').value; details.vouch_price = document.getElementById('vouch_price').value; } if(k==='letter') { details.let_text = document.getElementById('let_text').value; details.let_price = document.getElementById('let_price').value; } if(k==='lamin') { details.lam_sz = document.getElementById('lam_sz').value; details.lam_qty = document.getElementById('lam_qty').value; } } });
+            
+            const editId = document.getElementById('orderForm').dataset.editId; 
+            const orderId = editId ? parseInt(editId) : Date.now();
+            const hasImages = currentPhotoList.length > 0;
+
+            const orderData = { 
+                id: orderId, name, date: document.getElementById('dueDate').value, total: parseInt(document.getElementById('grandTotal').innerText.replace(/,/g,'')) || 0, advance: parseFloat(document.getElementById('debit').value || 0), summary: summaryArr.join(', '), notes: notesArr.join(' | '), staff: staffName, assigned_to: assignedTo, details: details, has_heavy_images: hasImages, archived: false, accomplished: false, finished_by: null, is_offline: false
+            };
+
+            const updates = {}; updates[`yoeyar_cloud_data/orders/${orderId}`] = orderData;
+            if (hasImages) { updates[`yoeyar_cloud_data/heavy_data/${orderId}`] = { images: currentPhotoList }; }
+
+            if (navigator.onLine) {
+                db.ref().update(updates, (error) => { if(error) { saveOffline(orderId, orderData, updates); } else { resetForm(); switchTab('queue'); } });
+            } else { saveOffline(orderId, orderData, updates); }
+        }
+
+        async function saveOffline(id, data, updates) {
+            try { data.is_offline = true; const record = { id: id, updates: updates, orderData: data }; await LocalDB.save(record); const exists = appData.orders.find(o => o.id === id); if(!exists) appData.orders.push(data); alert("✅ SAVED TO PHONE DB"); resetForm(); switchTab('queue'); } catch (e) { alert("Database Error: " + e.message); }
+        }
+        
+        function quickSettle(id) { const i = appData.orders.findIndex(o=>o.id==id); if(i>-1 && confirm("Settle this job?")) { const newAdvance = appData.orders[i].total; db.ref('yoeyar_cloud_data/orders/' + id).update({ advance: newAdvance }); } }
+        function markDone(id) { if(confirm("Mark this job as physically done?")) { db.ref('yoeyar_cloud_data/orders/' + id).update({ accomplished: true, finished_by: currentUser.name }); } }
+        function claimJob(id) { if(confirm("Mark this job as finished by you?")) { db.ref('yoeyar_cloud_data/orders/' + id).update({ accomplished: true, finished_by: currentUser.name }); } }
+        function deleteOrder(id) { if(confirm("Archive this job?")) { db.ref('yoeyar_cloud_data/orders/' + id).update({ archived: true }); } }
+
+        function cleanUpHeavyData() {
+            if(!confirm("Warning: This removes images for old/archived orders. Proceed?")) return;
+            const activeIds = new Set(appData.orders.map(o => o.id.toString()));
+            db.ref('yoeyar_cloud_data/heavy_data').once('value', snap => {
+                const heavy = snap.val(); if(!heavy) return alert("No heavy data found.");
+                let removedCount = 0; const updates = {};
+                Object.keys(heavy).forEach(hid => { if(!activeIds.has(hid)) { updates[`yoeyar_cloud_data/heavy_data/${hid}`] = null; removedCount++; } });
+                if(removedCount > 0) { db.ref().update(updates); alert(`Cleaned up ${removedCount} orphaned image sets.`); } else { alert("Storage is clean."); }
+            });
+        }
+
+        function importCSV(input) {
+            if (currentUser.role !== 'admin') return alert("Admin Only"); const file = input.files[0]; if (!file) return;
+            if (!confirm("⚠️ IMPORT WARNING: Merging data. Continue?")) { input.value = ''; return; }
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const rows = e.target.result.split("\n").filter(row => row.trim() !== ""); let importedCount = 0;
+                for (let i = 1; i < rows.length; i++) {
+                    const cols = rows[i].split(","); if (cols.length < 8) continue;
+                    try {
+                        const newId = parseInt(cols[0].trim()) || Date.now() + i; const dateStr = cols[1].trim(); 
+                        const newOrder = { id: newId, date: dateStr.includes("T") ? dateStr : (new Date(dateStr).toISOString().split('T')[0] + "T12:00"), name: cols[2].trim(), staff: cols[3].trim(), assigned_to: cols[4].trim() === '-' ? '' : cols[4].trim(), finished_by: cols[5].trim() === '-' ? null : cols[5].trim(), total: parseInt(cols[6].trim()) || 0, advance: parseInt(cols[7].trim()) || 0, summary: cols.slice(9).join(",").trim(), details: {}, notes: ["Imported from CSV"], photo: "", images: [], has_heavy_images: false, archived: false, accomplished: (cols[5].trim() !== '-' && cols[5].trim() !== '') };
+                        const exists = appData.orders.some(o => o.id === newOrder.id); if (!exists) { appData.orders.push(newOrder); db.ref(`yoeyar_cloud_data/orders/${newOrder.id}`).set(newOrder); importedCount++; }
+                    } catch (err) { console.error("Error parsing row " + i, err); }
+                }
+                alert(`✅ Import Complete! ${importedCount} recovered.`); input.value = ''; location.reload(); 
+            }; reader.readAsText(file);
+        }
+
+        function addNewStockItem() { const name = prompt("Enter Item Name:"); if(name) { appData.stock.push({ name: name, qty: 0, last_updated: new Date().toLocaleDateString() }); db.ref('yoeyar_cloud_data/stock').set(appData.stock); } }
+        function updateStockQty(index, change) { const newQty = parseInt(appData.stock[index].qty) + change; const today = new Date().toLocaleDateString(); db.ref('yoeyar_cloud_data/stock/' + index).update({ qty: newQty, last_updated: today }); }
+        function manualStockUpdate(index, val) { const newQty = parseInt(val) || 0; const today = new Date().toLocaleDateString(); db.ref('yoeyar_cloud_data/stock/' + index).update({ qty: newQty, last_updated: today }); }
+        function deleteStockItem(index) { if(confirm("Delete this item?")) { appData.stock.splice(index, 1); db.ref('yoeyar_cloud_data/stock').set(appData.stock); } }
+
+        function attemptLogin() { const uid = document.getElementById('loginUser').value; const pass = document.getElementById('loginPass').value.trim(); const acc = ACCOUNTS.find(a => a.id === uid); if (acc && acc.pass === pass) { currentUser = acc; localStorage.setItem('yoeyar_user', JSON.stringify(currentUser)); startSystem(); } else { alert("Incorrect Password!"); } }
+        function applyLoginState() { if(currentUser.role === 'admin') { document.getElementById('tab-admin').classList.remove('hidden'); } else { document.getElementById('tab-admin').classList.add('hidden'); } }
+        function logout() { localStorage.removeItem('yoeyar_user'); location.reload(); }
+
+        function processPhotos(input) {
+            const files = input.files; if (!files || files.length === 0) return;
+            document.getElementById('photoStatus').innerText = `Processing...`; const gallery = document.getElementById('photoGallery'); gallery.classList.remove('hidden');
+            Array.from(files).forEach((file) => { const reader = new FileReader(); reader.onload = (e) => { const img = new Image(); img.onload = () => { const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); const MAX = 800; let w = img.width; let h = img.height; if (w > MAX || h > MAX) { const ratio = w / h; if (w > h) { w = MAX; h = MAX / ratio; } else { h = MAX; w = MAX * ratio; } } canvas.width = w; canvas.height = h; ctx.drawImage(img, 0, 0, w, h); const b64 = canvas.toDataURL('image/jpeg', 0.6); currentPhotoList.push(b64); renderGalleryUI(); }; img.src = e.target.result; }; reader.readAsDataURL(file); });
+            input.value = ''; setTimeout(() => { document.getElementById('photoStatus').innerText = `${currentPhotoList.length} photos added`; document.getElementById('photoStatus').className = "text-[9px] text-green-600 font-bold"; }, 1000);
+        }
+        function renderGalleryUI() { const gallery = document.getElementById('photoGallery'); gallery.innerHTML = ''; currentPhotoList.forEach((b64, i) => { const thumb = document.createElement('div'); thumb.className = "relative h-16 rounded-lg bg-cover bg-center border border-slate-200 shadow-sm"; thumb.style.backgroundImage = `url(${b64})`; thumb.innerHTML = `<button type="button" onclick="removePhoto(${i})" class="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[8px] shadow-sm"><i class="fas fa-times"></i></button>`; gallery.appendChild(thumb); }); }
+        function removePhoto(index) { currentPhotoList.splice(index, 1); renderGalleryUI(); if(currentPhotoList.length === 0) { document.getElementById('photoStatus').innerText = "Use Camera or Gallery"; document.getElementById('photoStatus').className = "text-[9px] text-slate-400 font-bold"; } else { document.getElementById('photoStatus').innerText = `${currentPhotoList.length} photos remaining`; } }
+        function clearPhoto() { currentPhotoList = []; renderGalleryUI(); document.getElementById('photoGallery').classList.add('hidden'); document.getElementById('photoStatus').innerText = "Use Camera or Gallery"; document.getElementById('photoStatus').className = "text-[9px] text-slate-400 font-bold"; }
+
+        function renderForm() { document.getElementById('svcCheckboxes').innerHTML = Object.keys(SVCS).map(k => `<input type="checkbox" id="check_${k}" class="hidden peer" onchange="togglePanel('${k}')"><label for="check_${k}" class="svc-card flex flex-col items-center justify-center p-2 h-20 border border-slate-200 rounded-xl cursor-pointer bg-white hover:bg-slate-50 transition-all text-[10px] font-bold uppercase text-slate-400 group shadow-sm"><i class="fas fa-${SVC_ICONS[k]} text-xl mb-1 text-slate-300 transition-colors group-hover:text-slate-400"></i>${SVCS[k]}</label>`).join(''); }
+
+        function togglePanel(k) { 
+            const area = document.getElementById('dynamicPanels'); let panel = document.getElementById('panel_'+k); 
+            if(document.getElementById('check_'+k).checked) { 
+                if(!panel) { 
+                    let c = ''; const bi = "input-3d w-full p-2.5 rounded-xl text-sm font-bold text-slate-700 outline-none"; const si = "input-3d w-20 p-2.5 rounded-xl text-sm font-bold text-center outline-none"; 
+                    if(k==='photo') c = `<div class="grid grid-cols-2 gap-2"><select id="p_sz" onchange="calcOrder()" class="${bi}">${PHOTO_SIZES.map(s=>`<option>${s}</option>`).join('')}</select><select id="p_ty" onchange="toggleFrame(); calcOrder()" class="${bi}">${PHOTO_TYPES.map(t=>`<option>${t}</option>`).join('')}</select><select id="p_fr" onchange="calcOrder()" class="hidden ${bi} col-span-2">${FRAME_TYPES.map(f=>`<option>${f}</option>`).join('')}</select><input type="number" id="p_qty" value="1" oninput="calcOrder()" class="${si}" placeholder="Qty"></div>`; 
+                    else if(k==='sticker') c = `<div class="flex flex-col w-full gap-2"><div class="flex gap-2"><select id="st_sz" onchange="calcOrder(); toggleStickerCustom()" class="${bi} w-full">${STICKER_SIZES.map(s=>`<option>${s}</option>`).join('')}</select><select id="st_ty" onchange="calcOrder()" class="${bi} w-full"><option value="Normal">ရိုးရိုး</option><option value="Reflective">ရောင်ပြန်</option><option value="Clear">အကြည်</option></select></div><div class="flex gap-2"><select id="st_roll" class="${bi} w-full"><option value="7 inch">၇ လက်မ အနံ</option><option value="12 inch">၁၂ လက်မ အနံ</option></select><input type="number" id="st_qty" value="1" oninput="calcOrder()" class="${si}" placeholder="Qty"></div><div id="st_custom_inputs" class="hidden flex flex-col gap-2 bg-slate-50 p-2 rounded-lg border border-slate-100"><div class="text-[10px] text-slate-400 font-bold uppercase">Custom Size (Feet)</div><div class="flex gap-2"><input type="number" id="st_w" placeholder="Width (ft)" oninput="calcOrder()" class="${bi}"><input type="number" id="st_h" placeholder="Height (ft)" oninput="calcOrder()" class="${bi}"></div></div><label class="flex items-center gap-2 text-xs font-bold text-slate-500 cursor-pointer border px-3 py-2 rounded-xl bg-white w-fit shadow-sm"><input type="checkbox" id="st_cut" onchange="calcOrder()" class="rounded text-blue-600 focus:ring-blue-500"> Cutting (+${appData.prices.sticker.cutting||0})</label></div>`; 
+                    else if(k==='vinyl') c = `<div class="flex flex-col gap-2 w-full"><div class="flex gap-2"><select id="v_ty" onchange="calcOrder()" class="${bi}"><option value="အပါး">Thin</option><option value="အထူ">Thick</option></select><input type="number" id="v_w" placeholder="W" oninput="calcOrder()" class="${si}"><input type="number" id="v_h" placeholder="H" oninput="calcOrder()" class="${si}"><input type="number" id="v_qty" value="1" oninput="calcOrder()" class="${si}"></div><div class="flex gap-2 mt-1"><div class="flex-1 flex items-center border border-slate-200 rounded-xl bg-white px-2"><span class="text-[10px] text-slate-400 font-bold mr-1 whitespace-nowrap">Pipe</span><input type="number" id="v_pipe_ft" oninput="calcOrder()" class="w-full bg-transparent outline-none font-bold text-blue-600 text-sm" placeholder="0"></div><div class="flex-1 flex items-center border border-slate-200 rounded-xl bg-white px-2"><span class="text-[10px] text-slate-400 font-bold mr-1">Rings</span><input type="number" id="v_eyelet_qty" oninput="calcOrder()" class="w-full bg-transparent outline-none font-bold text-blue-600 text-sm" placeholder="0"></div></div></div>`; 
+                    else if(k==='stamp') c = `<div class="flex flex-col gap-2 w-full"><select id="stamp_shape" onchange="toggleStampShape(); calcOrder()" class="${bi}"><option value="Circle">Circle</option><option value="Rectangle">Rectangle</option></select><div id="stamp_circle_input"><input type="number" id="stamp_mm" placeholder="Radius (mm)" class="${bi}"></div><div id="stamp_rect_inputs" class="hidden flex gap-2"><input type="number" id="stamp_w" placeholder="W (mm)" class="${bi}"><input type="number" id="stamp_h" placeholder="H (mm)" class="${bi}"></div></div>`; 
+                    else if(k==='invite') c = `<div class="grid grid-cols-3 gap-2"><select id="i_sz" onchange="calcOrder()" class="${bi}">${INVITE_SIZES.map(s=>`<option>${s}</option>`).join('')}</select><select id="i_ty" onchange="calcOrder()" class="${bi}">${INVITE_TYPES.map(t=>`<option>${t}</option>`).join('')}</select><input type="number" id="i_qty" value="1" oninput="calcOrder()" class="${si}"></div>`; 
+                    else if(k==='copy') c = `<div class="grid grid-cols-2 gap-2"><select id="c_sz" onchange="calcOrder()" class="${bi}">${COPY_SIZES.map(s=>`<option>${s}</option>`).join('')}</select><select id="c_ty" onchange="calcOrder()" class="${bi}">${COPY_TYPES.map(t=>`<option>${t}</option>`).join('')}</select><select id="c_si" onchange="calcOrder()" class="${bi}">${COPY_SIDES.map(s=>`<option>${s}</option>`).join('')}</select><input type="number" id="c_qty" value="1" oninput="calcOrder()" class="${si}"></div>`; 
+                    else if(k==='typing') c = `<input type="number" id="qty_typing" value="1" oninput="calcOrder()" class="${si}" placeholder="Qty">`; 
+                    else if(k==='misc_custom') c = `<div class="flex flex-col gap-2 w-full"><input type="text" id="mc_name" placeholder="Item Name (ပစ္စည်းအမည်)" class="${bi} w-full"><div class="flex gap-2"><input type="text" id="mc_size" placeholder="Size/Details" class="${bi} w-full"><input type="number" id="mc_price" placeholder="Price (Ks)" oninput="calcOrder()" class="${bi} w-full"><input type="number" id="mc_qty" value="1" oninput="calcOrder()" class="${si}"></div></div>`; 
+                    else if(k==='card') c = `<div class="flex gap-2 w-full"><input type="number" id="card_price" placeholder="Price (per box)" oninput="calcOrder()" class="${bi} w-full"><input type="number" id="card_qty" value="1" oninput="calcOrder()" class="${si}" placeholder="Qty"></div>`; 
+                    else if(k==='voucher') c = `<div class="flex gap-2 w-full"><input type="number" id="vouch_price" placeholder="Price (per book)" oninput="calcOrder()" class="${bi} w-full"><input type="number" id="vouch_qty" value="1" oninput="calcOrder()" class="${si}" placeholder="Qty"></div>`; 
+                    else if(k==='letter') c = `<div class="flex gap-2 w-full"><input type="text" id="let_text" placeholder="Details/Color/Size" class="${bi} w-full"><input type="number" id="let_price" placeholder="Total Price" oninput="calcOrder()" class="${si} w-full"></div>`; 
+                    else if(k==='lamin') c = `<div class="flex gap-2 w-full"><select id="lam_sz" onchange="calcOrder()" class="${bi} w-full">${LAMIN_SIZES.map(s=>`<option>${s}</option>`).join('')}</select><input type="number" id="lam_qty" value="1" oninput="calcOrder()" class="${si}"></div>`; 
+                    area.insertAdjacentHTML('beforeend', `<div id="panel_${k}" class="service-panel active bg-white p-3 rounded-2xl border border-slate-200 shadow-sm relative mt-3"><div class="absolute -top-2.5 left-3 bg-slate-800 text-white text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-wider shadow-sm">${SVCS[k]}</div><div class="mt-2 flex flex-wrap gap-2">${c}</div><input type="text" id="desc_${k}" placeholder="Add optional note..." class="w-full mt-2 p-1.5 text-xs bg-transparent border-b border-slate-200 outline-none focus:border-blue-500 placeholder-slate-400"></div>`); 
+                } 
+            } else if(panel) panel.remove(); calcOrder(); 
+        }
+
+        function toggleFrame() { document.getElementById('p_fr').classList.toggle('hidden', document.getElementById('p_ty').value !== 'ဘောင်ပါ'); }
+        function toggleStickerCustom() { document.getElementById('st_custom_inputs').classList.toggle('hidden', document.getElementById('st_sz').value !== 'Custom Size'); }
+        function toggleStampShape() { const isCircle = document.getElementById('stamp_shape').value === 'Circle'; document.getElementById('stamp_circle_input').classList.toggle('hidden', !isCircle); document.getElementById('stamp_rect_inputs').classList.toggle('hidden', isCircle); }
+        function calcOrder() { if(!appData.prices || !appData.prices.photo) return; let total = 0; const p = appData.prices; if(document.getElementById('check_photo')?.checked) { const sz = document.getElementById('p_sz').value; const ty = document.getElementById('p_ty').value; const k = ty==='ဘောင်ပါ'?`${sz}_ဘောင်ပါ_${document.getElementById('p_fr').value}`:`${sz}_${ty}`; total += (p.photo[k]||0)*(document.getElementById('p_qty').value||0); } if(document.getElementById('check_sticker')?.checked) { const qty = document.getElementById('st_qty').value||0; const sz = document.getElementById('st_sz').value; const ty = document.getElementById('st_ty').value; if (sz === 'Custom Size') { const w = parseFloat(document.getElementById('st_w').value)||0; const h = parseFloat(document.getElementById('st_h').value)||0; const sqftPrice = (ty === 'Reflective') ? (p.sticker.sqft_reflect || 0) : (p.sticker.sqft_normal || 0); total += (w * h * sqftPrice * qty); } else { const k = `${sz}_${ty}`; total += (p.sticker[k]||0) * qty; } if(document.getElementById('st_cut').checked) total += (qty * (p.sticker.cutting||0)); } if(document.getElementById('check_vinyl')?.checked) { const w = parseFloat(document.getElementById('v_w').value)||0; const h = parseFloat(document.getElementById('v_h').value)||0; const qty = parseFloat(document.getElementById('v_qty').value)||1; total += (w * h * (p.vinyl[document.getElementById('v_ty').value]||0) * qty); total += (parseFloat(document.getElementById('v_pipe_ft').value)||0) * (p.vinyl.pipe||0); total += (parseFloat(document.getElementById('v_eyelet_qty').value)||0) * (p.vinyl.eyelet||0); } if(document.getElementById('check_invite')?.checked) { const k = `${document.getElementById('i_sz').value}_${document.getElementById('i_ty').value}`; total += (p.invite[k]||0)*(document.getElementById('i_qty').value||0); } if(document.getElementById('check_copy')?.checked) { const k = `${document.getElementById('c_sz').value}_${document.getElementById('c_ty').value}_${document.getElementById('c_si').value}`; total += (p.copy[k]||0)*(document.getElementById('c_qty').value||0); } if(document.getElementById('check_typing')?.checked) total += (p.misc.typing||0)*document.getElementById('qty_typing').value; if(document.getElementById('check_stamp')?.checked) { const sh = document.getElementById('stamp_shape').value; total += (sh==='Circle' ? p.stamp.circle : p.stamp.rect); } if(document.getElementById('check_misc_custom')?.checked) { total += (parseFloat(document.getElementById('mc_price').value)||0) * (parseFloat(document.getElementById('mc_qty').value)||1); } if(document.getElementById('check_card')?.checked) total += (parseFloat(document.getElementById('card_price').value)||0) * (parseFloat(document.getElementById('card_qty').value)||1); if(document.getElementById('check_voucher')?.checked) total += (parseFloat(document.getElementById('vouch_price').value)||0) * (parseFloat(document.getElementById('vouch_qty').value)||1); if(document.getElementById('check_letter')?.checked) total += (parseFloat(document.getElementById('let_price').value)||0); if(document.getElementById('check_lamin')?.checked) { const k = document.getElementById('lam_sz').value; total += (p.lamin[k]||0) * (parseFloat(document.getElementById('lam_qty').value)||1); } document.getElementById('grandTotal').innerText = Math.round(total).toLocaleString(); document.getElementById('balance').innerText = Math.round(total - (document.getElementById('debit').value||0)).toLocaleString(); }
+
+        function editOrder(id) { 
+            const o = appData.orders.find(x => x.id == id); if(!o) return alert("Error"); switchTab('new'); document.getElementById('orderForm').dataset.editId = o.id; document.getElementById('clientName').value = o.name; document.getElementById('dueDate').value = o.date; document.getElementById('debit').value = o.advance; document.querySelectorAll('#svcCheckboxes input').forEach(c => c.checked = false); document.getElementById('dynamicPanels').innerHTML = ''; if(o.staff) document.getElementById('orderStaff').value = o.staff; 
+            if(o.assigned_to) { selectAssignee(o.assigned_to); } else { selectAssignee(""); }
+            clearPhoto(); 
+            if (o.images && o.images.length > 0) { currentPhotoList = o.images; renderGalleryUI(); document.getElementById('photoGallery').classList.remove('hidden'); } else if (o.photo) { currentPhotoList = [o.photo]; renderGalleryUI(); document.getElementById('photoGallery').classList.remove('hidden'); } else if (o.has_heavy_images) { document.getElementById('photoStatus').innerText = "Fetching images..."; db.ref(`yoeyar_cloud_data/heavy_data/${o.id}`).once('value', snap => { const h = snap.val(); if(h && h.images) { currentPhotoList = h.images; renderGalleryUI(); document.getElementById('photoGallery').classList.remove('hidden'); document.getElementById('photoStatus').innerText = "Loaded"; } }); }
+            Object.keys(SVCS).forEach(k => { if(o.details && o.details[k]) { document.getElementById('check_'+k).checked = true; togglePanel(k); const d = o.details; if(document.getElementById(`desc_${k}`)) document.getElementById(`desc_${k}`).value = d[`desc_${k}`] || ''; if(k==='photo') { document.getElementById('p_sz').value=d.p_sz; document.getElementById('p_ty').value=d.p_ty; toggleFrame(); document.getElementById('p_fr').value=d.p_fr; document.getElementById('p_qty').value=d.p_qty; } if(k==='sticker') { document.getElementById('st_sz').value=d.st_sz; document.getElementById('st_ty').value=d.st_ty; document.getElementById('st_qty').value=d.st_qty; document.getElementById('st_cut').checked=d.st_cut; if(d.st_roll) document.getElementById('st_roll').value=d.st_roll; toggleStickerCustom(); if(d.st_sz==='Custom Size'){ document.getElementById('st_w').value=d.st_w; document.getElementById('st_h').value=d.st_h; } } if(k==='vinyl') { document.getElementById('v_ty').value=d.v_ty; document.getElementById('v_w').value=d.v_w; document.getElementById('v_h').value=d.v_h; document.getElementById('v_qty').value=d.v_qty; document.getElementById('v_pipe_ft').value=d.v_pipe_ft; document.getElementById('v_eyelet_qty').value=d.v_eyelet_qty; } if(k==='stamp') { document.getElementById('stamp_shape').value=d.stamp_shape; toggleStampShape(); document.getElementById('stamp_mm').value=d.stamp_mm; document.getElementById('stamp_w').value=d.stamp_w; document.getElementById('stamp_h').value=d.stamp_h; } if(k==='invite') { document.getElementById('i_sz').value=d.i_sz; document.getElementById('i_ty').value=d.i_ty; document.getElementById('i_qty').value=d.i_qty; } if(k==='copy') { document.getElementById('c_sz').value=d.c_sz; document.getElementById('c_ty').value=d.c_ty; document.getElementById('c_si').value=d.c_si; document.getElementById('c_qty').value=d.c_qty; } if(k==='typing') document.getElementById('qty_typing').value = d.qty_typing; if(k==='misc_custom') { document.getElementById('mc_name').value = d.mc_name; document.getElementById('mc_size').value = d.mc_size; document.getElementById('mc_price').value = d.mc_price; document.getElementById('mc_qty').value = d.mc_qty; } if(k==='card') { document.getElementById('card_qty').value=d.card_qty; document.getElementById('card_price').value=d.card_price; } if(k==='voucher') { document.getElementById('vouch_qty').value=d.vouch_qty; document.getElementById('vouch_price').value=d.vouch_price; } if(k==='letter') { document.getElementById('let_text').value=d.let_text; document.getElementById('let_price').value=d.let_price; } if(k==='lamin') { document.getElementById('lam_sz').value=d.lam_sz; document.getElementById('lam_qty').value=d.lam_qty; } } }); calcOrder(); const currentL = document.getElementById('lang-en').classList.contains('bg-slate-800') ? 'en' : 'my'; changeLang(currentL); document.getElementById('cancelBtn').classList.remove('hidden'); 
+        }
+        function cancelEdit() { resetForm(); switchTab('queue'); }
+        function resetForm() { document.getElementById('orderForm').reset(); document.getElementById('orderForm').dataset.editId = ""; document.getElementById('dynamicPanels').innerHTML = ""; document.getElementById('cancelBtn').classList.add('hidden'); clearPhoto(); document.getElementById('orderStaff').value = currentUser.name; selectAssignee(""); const currentL = document.getElementById('lang-en').classList.contains('bg-slate-800') ? 'en' : 'my'; changeLang(currentL); }
+        
+        function setDoneFilter(f) { doneFilter = f; document.querySelectorAll('.df-btn').forEach(b => { b.className = "df-btn flex-1 py-2 bg-transparent text-slate-500 rounded-lg text-xs font-bold transition-all"; }); document.getElementById('df-'+f).className = "df-btn active flex-1 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold transition-all"; renderDoneList(); }
+        function switchTab(t) { const views = ['queue', 'done', 'new', 'admin', 'report', 'daily', 'stock']; views.forEach(v => { document.getElementById('view-' + v)?.classList.toggle('hidden', v !== t); }); document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active', 'bg-white', 'shadow-sm', 'text-slate-800')); document.getElementById('tab-' + t)?.classList.add('active', 'bg-white', 'shadow-sm', 'text-slate-800'); if(t==='queue') renderQueue(); if(t==='done') renderDoneList(); if(t==='admin') renderAdmin(); if(t==='report') renderReport(); if(t==='daily') renderDaily(); if(t==='stock') renderStock(); }
+        
+        function renderStock() { const container = document.getElementById('stockListContainer'); if(!appData.stock || appData.stock.length === 0) { container.innerHTML = `<div class="text-center text-slate-400 text-xs py-10">No stock items added yet.<br>Click "ADD NEW" to start.</div>`; return; } container.innerHTML = appData.stock.map((item, index) => item ? ` <div class="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex justify-between items-center"> <div> <div class="font-bold text-slate-700 text-sm">${item.name}</div> <div class="text-[10px] text-slate-400 font-bold uppercase">Updated: ${item.last_updated || '-'}</div> </div> <div class="flex items-center gap-2"> <button onclick="updateStockQty(${index}, -1)" class="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 font-bold">-</button> <input type="number" onchange="manualStockUpdate(${index}, this.value)" value="${item.qty}" class="w-16 text-center font-black text-slate-800 text-lg outline-none border-b border-transparent focus:border-blue-500 transition-colors"> <button onclick="updateStockQty(${index}, 1)" class="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 font-bold">+</button> <button onclick="deleteStockItem(${index})" class="ml-2 text-red-300 hover:text-red-500"><i class="fas fa-trash"></i></button> </div> </div> ` : '').join(''); }
+
+        function saveAdminSettings() { ensureDataStructure(); document.querySelectorAll('.adm-photo').forEach(i => appData.prices.photo[i.dataset.pKey] = parseFloat(i.value) || 0); document.querySelectorAll('.adm-sticker').forEach(i => appData.prices.sticker[i.dataset.stKey] = parseFloat(i.value) || 0); document.querySelectorAll('.adm-invite').forEach(i => appData.prices.invite[i.dataset.iKey] = parseFloat(i.value) || 0); document.querySelectorAll('.adm-copy').forEach(i => appData.prices.copy[i.dataset.cKey] = parseFloat(i.value) || 0); document.querySelectorAll('.adm-lamin').forEach(i => appData.prices.lamin[i.dataset.lKey] = parseFloat(i.value) || 0); if(appData.prices.vinyl) { appData.prices.vinyl['အပါး'] = parseFloat(document.getElementById('adm_v_thin').value) || 0; appData.prices.vinyl['အထူ'] = parseFloat(document.getElementById('adm_v_thick').value) || 0; appData.prices.vinyl['pipe'] = parseFloat(document.getElementById('adm_v_pipe').value) || 0; appData.prices.vinyl['eyelet'] = parseFloat(document.getElementById('adm_v_eyelet').value) || 0; } if(appData.prices.misc) appData.prices.misc.typing = parseFloat(document.getElementById('adm_m_typing').value) || 0; if(appData.prices.stamp) { appData.prices.stamp.circle = parseFloat(document.getElementById('adm_stmp_c').value)||0; appData.prices.stamp.rect = parseFloat(document.getElementById('adm_stmp_r').value)||0; } if(appData.prices.sticker) { appData.prices.sticker.cutting = parseFloat(document.getElementById('adm_st_cut').value) || 0; appData.prices.sticker.sqft_normal = parseFloat(document.getElementById('adm_st_sq_norm').value) || 0; appData.prices.sticker.sqft_reflect = parseFloat(document.getElementById('adm_st_sq_refl').value) || 0; } const btn = document.getElementById('adminSaveBtn'); const originalText = btn.innerHTML; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...'; btn.classList.add('opacity-50', 'pointer-events-none'); db.ref('yoeyar_cloud_data/prices').set(appData.prices, (error) => { btn.innerHTML = originalText; btn.classList.remove('opacity-50', 'pointer-events-none'); if (error) alert("Error: " + error.message); else alert("✅ Settings Saved Successfully!"); }); }
+
+        function exportData(type) { if(currentUser.role !== 'admin' && !autoDownloadedToday) return alert("Admin Only"); const header = "ID,Date,Customer,OrderTaker,AssignedTo,FinishedBy,Total,Advance,Balance,Summary\n"; let csv = header; const now = new Date(); const jobs = appData.orders.filter(o => { if(o.archived) return false; const d = new Date(o.date); if(type === 'daily') return d.toDateString() === now.toDateString(); if(type === 'monthly') return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); return false; }); if(jobs.length === 0 && !autoDownloadedToday) return alert("No data for this period."); jobs.forEach(o => { const bal = o.total - o.advance; const cleanSummary = o.summary.replace(/,/g, ' '); csv += `${o.id},${o.date.substring(0,10)},${o.name},${o.staff},${o.assigned_to||'-'},${o.finished_by||'-'},${o.total},${o.advance},${bal},${cleanSummary}\n`; }); const blob = new Blob([csv], { type: 'text/csv' }); const url = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `Yoeyar_${type}_${now.toISOString().split('T')[0]}.csv`; a.click(); }
+        function pruneOldData() { if(currentUser.role !== 'admin') return alert("Admin Only"); if(!confirm("WARNING: Delete orders > 60 days?")) return; const now = new Date(); const cutoff = new Date(now.setDate(now.getDate() - 60)); appData.orders.forEach(o => { if(new Date(o.date) <= cutoff) db.ref('yoeyar_cloud_data/orders/' + o.id).remove(); }); alert("Cleanup Complete."); }
+
+        function renderQueue() { const list = document.getElementById('queueList'); const q = document.getElementById('searchInput').value.toLowerCase(); const sort = document.getElementById('sortBy').value; let arr = appData.orders.filter(o => !o.archived && !o.accomplished && (o.name.toLowerCase().includes(q) || o.id.toString().includes(q))); arr.sort((a, b) => { if(sort === 'newest') return b.id - a.id; if(sort === 'due') { const dateA = a.date ? new Date(a.date) : new Date('9999-12-31'); const dateB = b.date ? new Date(b.date) : new Date('9999-12-31'); return dateA - dateB; } }); list.innerHTML = generateListHTML(arr, false); }
+        function renderDoneList() { const list = document.getElementById('doneList'); let arr = appData.orders.filter(o => !o.archived && o.accomplished); if(doneFilter === 'paid') arr = arr.filter(o => (o.total - o.advance) <= 0); if(doneFilter === 'unpaid') arr = arr.filter(o => (o.total - o.advance) > 0); arr.sort((a, b) => b.id - a.id); list.innerHTML = generateListHTML(arr, true); }
+        
+        function generateListHTML(arr, isDoneView) { 
+            let totalDebt = 0; 
+            const html = arr.map(o => { 
+                const bal = o.total - o.advance; 
+                if(bal > 0) totalDebt += bal; 
+                const isPaid = bal <= 0; 
+                const statusColor = isPaid ? 'border-l-green-500' : 'border-l-red-500'; 
+                let dateDisplay = o.date; 
+                if(o.date && o.date.includes('T')) { 
+                    const dt = new Date(o.date); 
+                    dateDisplay = dt.toLocaleDateString() + ' ' + dt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}); 
+                } 
+                const doneBadge = o.accomplished ? `<span class="badge-done px-2 py-0.5 rounded text-[10px] font-bold"><i class="fas fa-check"></i> Done</span>` : `<span class="bg-orange-100 text-orange-700 border border-orange-200 px-2 py-0.5 rounded text-[10px] font-bold"><i class="fas fa-clock"></i> Pending</span>`; 
+                const actionBtn = !o.accomplished ? `<button onclick="event.stopPropagation(); markDone(${o.id})" class="text-[10px] font-bold px-3 py-1 bg-white border border-slate-200 rounded-lg hover:bg-green-50 text-slate-500 hover:text-green-600 transition-colors shadow-sm">✅ Mark Done</button>` : ``; 
+                const assignBadge = o.assigned_to ? `<span class="text-[9px] bg-blue-50 text-blue-500 px-1.5 py-0.5 rounded border border-blue-100 ml-1">To: ${o.assigned_to}</span>` : ''; 
+                
+                const offlineBadge = o.is_offline ? `<div class="bg-yellow-500 text-white text-[9px] font-bold px-2 py-0.5 rounded flex items-center gap-1 mb-1 w-fit shadow-sm"><i class="fas fa-wifi"></i> Waiting for Internet</div>` : '';
+
+                return `<div onclick="showDetails(${o.id})" class="cursor-pointer bg-white p-4 rounded-2xl shadow-sm border border-slate-100 ${statusColor} border-l-4 relative transition-all hover:bg-slate-50 hover:shadow-md">
+                    ${offlineBadge}
+                    <div class="flex justify-between items-start mb-2"><div><h3 class="font-black text-slate-800 text-lg leading-none">${o.name}</h3><div class="text-[10px] text-slate-400 font-bold uppercase mt-1 flex gap-2 items-center">ID: ${o.id.toString().slice(-6)} • ${o.staff || 'Shop'} ${assignBadge} ${doneBadge}</div></div><div class="text-right">${o.has_heavy_images || o.photo || (o.images && o.images.length>0) ? '<i class="fas fa-camera text-blue-500 text-xs mb-1 block"></i>' : ''}<div class="text-xs ${isPaid ? 'text-slate-400' : 'text-red-500 font-bold'}">${dateDisplay || 'No Date'}</div></div></div><div class="bg-slate-50 p-2 rounded-lg text-xs text-slate-600 mb-3 truncate font-medium">${o.summary || 'No details'}</div><div class="flex justify-between items-center border-t border-slate-100 pt-2"><div class="flex gap-2 items-center">${!isPaid ? `<button onclick="event.stopPropagation(); quickSettle(${o.id})" class="px-3 py-1 bg-green-100 text-green-700 text-[10px] font-bold rounded-full border border-green-200 hover:bg-green-200 transition-colors">Settle ${bal.toLocaleString()}</button>` : '<span class="px-3 py-1 bg-slate-100 text-slate-500 text-[10px] font-bold rounded-full">Paid</span>'} ${actionBtn}</div><div class="flex gap-3"><button onclick="event.stopPropagation(); editOrder(${o.id})" class="text-blue-500 hover:text-blue-700 p-2 rounded-full hover:bg-blue-50 transition-colors"><i class="fas fa-pen pointer-events-none"></i></button>${currentUser.role === 'admin' ? `<button onclick="event.stopPropagation(); deleteOrder(${o.id})" class="text-red-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition-colors"><i class="fas fa-trash pointer-events-none"></i></button>` : ''}</div></div></div>`; }).join(''); return html || `<div class="text-center py-10 text-slate-400 text-xs">No ${isDoneView ? 'finished' : 'pending'} jobs found.</div>`; }
+
+        function renderReport() { const now = new Date(); const currentMonth = now.getMonth(); const currentYear = now.getFullYear(); const staffList = ACCOUNTS.filter(a => a.role !== 'admin'); const statsAdded = {}; const statsDone = {}; staffList.forEach(s => { statsAdded[s.name] = {count:0, total:0}; statsDone[s.name] = {count:0, total:0}; }); statsAdded['Admin'] = {count:0, total:0}; statsDone['Admin'] = {count:0, total:0}; statsAdded['Shop Common'] = {count:0, total:0}; statsDone['Shop Common'] = {count:0, total:0}; appData.orders.forEach(o => { const d = new Date(o.date); if(d.getMonth() === currentMonth && d.getFullYear() === currentYear && !o.archived) { const adder = o.staff || 'Shop Common'; if(!statsAdded[adder]) statsAdded[adder] = {count:0, total:0}; statsAdded[adder].count++; statsAdded[adder].total += (o.total || 0); if(o.accomplished) { const doner = o.finished_by || 'Shop Common'; if(!statsDone[doner]) statsDone[doner] = {count:0, total:0}; statsDone[doner].count++; statsDone[doner].total += (o.total || 0); } } }); const generateReportHTML = (statsObj, iconColor) => { let html = ''; Object.keys(statsObj).forEach((name, i) => { if(statsObj[name].count > 0 || staffList.find(s=>s.name===name)) { const totalDisplay = currentUser.role === 'admin' ? `<div class="font-black text-slate-800">${statsObj[name].total.toLocaleString()}</div><div class="text-[9px] text-slate-400">MMK</div>` : `<div class="font-black text-slate-300">---</div><div class="text-[9px] text-slate-300">Hidden</div>`; html += `<div class="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden mb-2"><div class="absolute left-0 top-0 bottom-0 w-1 ${iconColor}"></div><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-xs">${name.substring(0,1)}</div><div><div class="font-bold text-slate-700 text-sm">${name}</div><div class="text-[10px] text-slate-400 uppercase font-bold">${statsObj[name].count} Jobs</div></div></div><div class="text-right">${totalDisplay}</div></div>`; } }); return html || '<div class="text-center text-xs text-slate-400">No data.</div>'; }; document.getElementById('reportAddedList').innerHTML = generateReportHTML(statsAdded, 'bg-blue-500'); document.getElementById('reportDoneList').innerHTML = generateReportHTML(statsDone, 'bg-green-500'); }
+        function renderDaily() { if(!currentUser) return; document.getElementById('dailyStaffName').innerText = currentUser.name + "'s Daily Log"; const today = new Date(); const dateStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0'); document.getElementById('dailyDateStr').innerText = today.toDateString(); const myList = document.getElementById('dailyMyList'); const poolList = document.getElementById('dailyPoolList'); let myCount = 0; let myTotal = 0; let myHtml = ''; let poolHtml = ''; const todayJobs = appData.orders.filter(o => o.date && o.date.startsWith(dateStr) && !o.archived); todayJobs.forEach(o => { const priceDisplay = currentUser.role === 'admin' ? `<div class="font-black text-slate-600 text-sm">${o.total.toLocaleString()}</div>` : `<div class="font-black text-slate-300 text-sm">---</div>`; const itemHtml = (isDone) => `<div class="bg-white p-3 rounded-lg border ${isDone ? 'border-green-200 bg-green-50' : 'border-slate-100'} flex justify-between items-center shadow-sm"><div><div class="font-bold text-slate-700 text-sm">${o.name}</div><div class="text-[10px] text-slate-400">${o.summary} • ${o.staff}</div></div><div class="flex items-center gap-3">${priceDisplay}${!isDone ? `<button onclick="claimJob(${o.id})" class="px-3 py-1 bg-blue-100 text-blue-600 text-[10px] font-bold rounded-lg hover:bg-blue-200">✅ Finish & Claim</button>` : '<i class="fas fa-check text-green-600"></i>'}</div></div>`; if (o.accomplished) { if (o.finished_by === currentUser.name) { myCount++; myTotal += o.total; myHtml += itemHtml(true); } } else { poolHtml += itemHtml(false); } }); myList.innerHTML = myHtml || '<div class="text-center text-xs text-slate-400 py-4">No jobs finished by you today.</div>'; poolList.innerHTML = poolHtml || '<div class="text-center text-xs text-slate-400 py-4">Everything is done!</div>'; document.getElementById('dailyCount').innerText = myCount; if(currentUser.role === 'admin') { document.getElementById('dailyTotalDisplay').innerHTML = `<span id="dailyTotal">${myTotal.toLocaleString()}</span> <span class="text-sm">Ks</span>`; } else { document.getElementById('dailyTotalDisplay').innerHTML = `<span class="text-slate-400">---</span>`; } }
+        function renderAdmin() { const container = document.getElementById('adminMatrixContainer'); if(!container || !appData) return; ensureDataStructure(); const card = (title, icon, color, content) => `<div class="bg-white p-5 rounded-3xl border-l-8 border-l-${color}-500 shadow-sm border border-slate-100 mb-4"><h3 class="font-bold text-${color}-600 mb-4 border-b pb-2 flex items-center gap-2"><i class="fas fa-${icon}"></i> ${title}</h3><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">${content}</div></div>`; const bi = "input-3d w-24 p-1.5 rounded-lg text-right text-xs font-bold text-slate-600"; const photoHTML = PHOTO_SIZES.map(sz => `<div class="bg-white p-3 rounded-xl border border-slate-200 text-xs shadow-sm"><div class="font-bold text-slate-400 mb-2 border-b border-slate-100 pb-1">${sz}</div>${PHOTO_TYPES.flatMap(ty => ty === 'ဘောင်ပါ' ? FRAME_TYPES.map(ft=>({k:`${sz}_ဘောင်ပါ_${ft}`, n:`ဘောင် ${ft}`})) : [{k:`${sz}_${ty}`, n:ty}]).map(i => `<div class="flex justify-between items-center mb-1"><span>${i.n}</span><input type="number" data-p-key="${i.k}" class="adm-photo ${bi}" value="${appData.prices.photo[i.k]||0}"></div>`).join('')}</div>`).join(''); const stickerHTML = STICKER_SIZES.map(sz => { if(sz === 'Custom Size') return ''; return `<div class="bg-white p-3 rounded-xl border border-slate-200 text-xs shadow-sm"><div class="font-bold text-slate-400 mb-2 border-b border-slate-100 pb-1">${sz}</div>${STICKER_TYPES.map(ty => `<div class="flex justify-between items-center mb-1"><span>${ty}</span><input type="number" data-st-key="${sz}_${ty}" class="adm-sticker ${bi}" value="${appData.prices.sticker[`${sz}_${ty}`]||0}"></div>`).join('')}</div>`; }).join('') + 
+            `<div class="col-span-full mt-2 space-y-2">
+                <div class="bg-blue-50 p-3 rounded-xl border border-blue-100">
+                    <div class="text-xs font-bold text-blue-600 mb-2">Custom Size Pricing (Per Sq Ft)</div>
+                    <div class="flex justify-between items-center mb-1"><span class="text-xs">Normal Type</span> <input type="number" id="adm_st_sq_norm" class="${bi}" value="${appData.prices.sticker.sqft_normal||0}"></div>
+                    <div class="flex justify-between items-center"><span class="text-xs">Reflective Type</span> <input type="number" id="adm_st_sq_refl" class="${bi}" value="${appData.prices.sticker.sqft_reflect||0}"></div>
+                </div>
+                <div class="bg-rose-50 p-3 rounded-xl border border-rose-100 flex justify-between items-center"><label class="text-xs font-bold text-rose-600">Cutting Charge (Per Pc):</label> <input type="number" id="adm_st_cut" class="${bi}" value="${appData.prices.sticker.cutting||0}"></div>
+            </div>`; 
+            
+            const vinylHTML = `
+            <div class="col-span-full space-y-4">
+                <div class="flex gap-4 text-sm bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                    <div class="flex-1"><label class="block text-xs font-bold text-slate-400 mb-1">Thin/sqft</label><input type="number" id="adm_v_thin" class="input-3d w-full p-2 rounded-lg" value="${appData.prices.vinyl['အပါး']||0}"></div>
+                    <div class="flex-1"><label class="block text-xs font-bold text-slate-400 mb-1">Thick/sqft</label><input type="number" id="adm_v_thick" class="input-3d w-full p-2 rounded-lg" value="${appData.prices.vinyl['အထူ']||0}"></div>
+                </div>
+                <div class="flex gap-4 text-sm bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                    <div class="flex-1"><label class="block text-xs font-bold text-slate-400 mb-1">Pipe/ft</label><input type="number" id="adm_v_pipe" class="input-3d w-full p-2 rounded-lg text-blue-600" value="${appData.prices.vinyl.pipe||0}"></div>
+                    <div class="flex-1"><label class="block text-xs font-bold text-slate-400 mb-1">Eyelet/pc</label><input type="number" id="adm_v_eyelet" class="input-3d w-full p-2 rounded-lg text-blue-600" value="${appData.prices.vinyl.eyelet||0}"></div>
+                </div>
+            </div>`; 
+            
+            const inviteHTML = INVITE_SIZES.map(sz => `<div class="bg-white p-3 rounded-xl border border-slate-200 text-xs shadow-sm"><div class="font-bold text-slate-400 mb-2 border-b border-slate-100 pb-1">${sz}</div>${INVITE_TYPES.map(ty => `<div class="flex justify-between items-center mb-1"><span>${ty}</span><input type="number" data-i-key="${sz}_${ty}" class="adm-invite ${bi}" value="${appData.prices.invite[`${sz}_${ty}`]||0}"></div>`).join('')}</div>`).join(''); 
+            const copyHTML = COPY_SIZES.map(sz => `<div class="bg-white p-3 rounded-xl border border-slate-200 text-xs shadow-sm"><div class="font-bold text-slate-400 mb-2 border-b border-slate-100 pb-1">${sz}</div>${COPY_TYPES.flatMap(ty => COPY_SIDES.map(si => ({k: `${sz}_${ty}_${si}`, n: `${ty} (${si})` }))).map(i => `<div class="flex justify-between items-center mb-1"><span>${i.n}</span><input type="number" data-c-key="${i.k}" class="adm-copy ${bi}" value="${appData.prices.copy[i.k]||0}"></div>`).join('')}</div>`).join(''); 
+            
+            const stampHTML = `
+            <div class="bg-indigo-50 p-4 rounded-xl flex justify-between items-center mb-2 shadow-sm"><span>Circle Base</span><input type="number" id="adm_stmp_c" class="${bi}" value="${appData.prices.stamp.circle||0}"></div>
+            <div class="bg-indigo-50 p-4 rounded-xl flex justify-between items-center shadow-sm"><span>Rect Base</span><input type="number" id="adm_stmp_r" class="${bi}" value="${appData.prices.stamp.rect||0}"></div>`; 
+            
+            const miscHTML = `<div class="bg-white p-4 rounded-xl shadow-sm flex justify-between items-center border border-slate-200"><span>Typing (Per Page)</span><input type="number" id="adm_m_typing" class="${bi}" value="${appData.prices.misc.typing||0}"></div>`; 
+            const laminHTML = LAMIN_SIZES.map(s => `<div class="bg-white p-3 rounded-xl shadow-sm flex justify-between items-center border border-slate-200"><span>${s}</span><input type="number" data-l-key="${s}" class="adm-lamin ${bi}" value="${appData.prices.lamin[s]||0}"></div>`).join(''); 
+            
+            container.innerHTML = card('Photo', 'camera', 'blue', photoHTML) + card('Sticker', 'sticky-note', 'rose', stickerHTML) + card('Vinyl', 'scroll', 'green', vinylHTML) + card('Invite', 'envelope', 'purple', inviteHTML) + card('Copy', 'copy', 'cyan', copyHTML) + card('Stamp', 'stamp', 'indigo', stampHTML) + card('Lamin', 'layer-group', 'gray', laminHTML) + card('Misc', 'tools', 'amber', miscHTML); 
+        }
+
+        function formatDetails(d) { let html = ''; const box = "bg-white p-3 rounded-xl text-xs border border-slate-100 shadow-sm mb-2"; if(d.p_sz) html += `<div class="${box} border-l-4 border-l-blue-500"><b>📸 Photo:</b> ${d.p_sz} | ${d.p_ty} ${d.p_fr?'| '+d.p_fr:''} | Qty: ${d.p_qty}</div>`; if(d.st_sz) { const rollInfo = d.st_roll ? `(Roll: ${d.st_roll})` : ''; html += `<div class="${box} border-l-4 border-l-rose-500"><b>🏷️ Sticker:</b> ${d.st_sz} ${d.st_sz==='Custom Size'?'('+d.st_w+'x'+d.st_h+'ft)':''} | ${d.st_ty} ${rollInfo} | Qty: ${d.st_qty} ${d.st_cut?'✂️':''}</div>`; } if(d.v_ty) html += `<div class="${box} border-l-4 border-l-green-500"><b>📜 Vinyl:</b> ${d.v_ty} | ${d.v_w}x${d.v_h}ft | Qty: ${d.v_qty} <div class="mt-1 opacity-70 pt-1 flex gap-2 border-t border-dashed border-green-100"><span>Pipe: ${d.v_pipe_ft}ft</span> <span>Rings: ${d.v_eyelet_qty}</span></div></div>`; if(d.stamp_shape) html += `<div class="${box} border-l-4 border-l-indigo-500"><b>🛡️ Stamp:</b> ${d.stamp_shape} | ${d.stamp_shape==='Circle'?'Radius: '+d.stamp_mm+'mm':'WxH: '+d.stamp_w+'x'+d.stamp_h+'mm'}</div>`; if(d.i_sz) html += `<div class="${box} border-l-4 border-l-purple-500"><b>💌 Invite:</b> ${d.i_sz} | ${d.i_ty} | Qty: ${d.i_qty}</div>`; if(d.c_sz) html += `<div class="${box} border-l-4 border-l-cyan-500"><b>📄 Copy:</b> ${d.c_sz} | ${d.c_ty} | ${d.c_si} | Qty: ${d.c_qty}</div>`; if(d.qty_typing) html += `<div class="${box} border-l-4 border-l-slate-500"><b>Typing:</b> ${d.qty_typing} pages</div>`; if(d.mc_name) html += `<div class="${box} border-l-4 border-l-teal-500"><b>📦 General:</b> ${d.mc_name}<br><span class="opacity-75">${d.mc_size}</span> | ${d.mc_price}Ks x ${d.mc_qty}</div>`; if(d.card_qty) html += `<div class="${box} border-l-4 border-l-orange-500"><b>🪪 Address Card:</b> ${d.card_qty} box(es)</div>`; if(d.vouch_qty) html += `<div class="${box} border-l-4 border-l-yellow-500"><b>🧾 Voucher:</b> ${d.vouch_qty} book(s)</div>`; if(d.let_text) html += `<div class="${box} border-l-4 border-l-pink-500"><b>🔡 Letter Cut:</b> ${d.let_text}</div>`; if(d.lam_sz) html += `<div class="${box} border-l-4 border-l-gray-500"><b>🛡️ Lamin:</b> ${d.lam_sz} x ${d.lam_qty}</div>`; return html || '<div class="text-xs text-slate-400 italic">Legacy Order</div>'; }
+        
+        function showDetails(id) { 
+            currentDetailsId = id;
+            const o = appData.orders.find(x => x.id == id); if(!o) return; 
+            document.getElementById('modalName').innerText = o.name; 
+            let dateDisplay = o.date; if(o.date.includes('T')) { const dt = new Date(o.date); dateDisplay = dt.toLocaleDateString() + ' ' + dt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}); } 
+            document.getElementById('modalDate').innerText = dateDisplay; 
+            document.getElementById('modalDetails').innerHTML = o.details ? formatDetails(o.details) : `<div class="p-2 text-xs">${o.summary}</div>`; 
+            
+            const photoArea = document.getElementById('modalPhotoArea'); 
+            const galleryArea = document.getElementById('modalGalleryArea');
+            const dlBtn = document.getElementById('downloadBtn'); 
+            const loading = document.getElementById('modalLoading');
+            
+            photoArea.classList.add('hidden'); galleryArea.classList.add('hidden'); loading.classList.add('hidden');
+
+            if (o.has_heavy_images && (!o.images || o.images.length === 0)) {
+                loading.classList.remove('hidden');
+                db.ref(`yoeyar_cloud_data/heavy_data/${o.id}`).once('value', snap => {
+                    loading.classList.add('hidden');
+                    const h = snap.val();
+                    if(h && h.images) {
+                        displayImages(h.images);
+                    } else {
+                        photoArea.innerHTML = "<div class='p-4 text-xs text-slate-400'>Image removed from server.</div>";
+                        photoArea.classList.remove('hidden');
+                    }
+                });
+            } else {
+                const images = o.images || (o.photo ? [o.photo] : []);
+                displayImages(images);
+            }
+
+            function displayImages(images) {
+                if(images.length > 0) {
+                    if(images.length === 1) {
+                        photoArea.style.backgroundImage = `url(${images[0]})`; 
+                        photoArea.classList.remove('hidden'); 
+                        dlBtn.href = images[0];
+                    } else {
+                        galleryArea.classList.remove('hidden');
+                        galleryArea.innerHTML = '';
+                        images.forEach(imgData => {
+                            const div = document.createElement('div');
+                            div.className = "h-24 bg-slate-100 rounded-lg bg-cover bg-center border border-slate-200 shadow-sm";
+                            div.style.backgroundImage = `url(${imgData})`;
+                            div.onclick = function() {
+                                const win = window.open();
+                                win.document.write('<img src="' + imgData + '" style="width:100%"/>');
+                            };
+                            galleryArea.appendChild(div);
+                        });
+                        photoArea.style.backgroundImage = `url(${images[0]})`; 
+                        photoArea.classList.remove('hidden'); 
+                        dlBtn.href = images[0];
+                    }
+                }
+            }
+
+            const bal = o.total - o.advance; document.getElementById('modalBalance').innerText = bal.toLocaleString(); document.getElementById('modalBalance').className = `text-2xl font-black ${bal<=0 ? 'text-green-500':'text-red-500'}`; document.getElementById('modalStaff').innerText = `Added By: ${o.staff || 'Unknown'}`; 
+            if(o.assigned_to) { document.getElementById('modalAssigned').classList.remove('hidden'); document.getElementById('modalAssigned').innerText = `To: ${o.assigned_to}`; } else { document.getElementById('modalAssigned').classList.add('hidden'); }
+            const statusDiv = document.getElementById('modalStatusBadge'); if(o.accomplished) { statusDiv.className = 'mt-2 inline-block px-3 py-1 rounded-full text-[10px] font-bold uppercase bg-green-100 text-green-700'; statusDiv.innerText = `Done by ${o.finished_by || 'Unknown'}`; } else { statusDiv.className = 'mt-2 inline-block px-3 py-1 rounded-full text-[10px] font-bold uppercase bg-orange-100 text-orange-700'; statusDiv.innerText = 'Pending Work'; } const noteBox = document.getElementById('modalNotesBox'); if(o.notes) { noteBox.classList.remove('hidden'); document.getElementById('modalNotes').innerText = o.notes; } else { noteBox.classList.add('hidden'); } document.getElementById('jobModal').classList.remove('hidden'); 
+        }
+        function closeModal() { window.speechSynthesis.cancel(); document.getElementById('jobModal').classList.add('hidden'); }
+        
+        function changeLang(l) { 
+            document.getElementById('lang-en').className = `text-[10px] font-bold px-3 py-1 rounded-full border ${l==='en' ? 'bg-slate-800 text-white border-slate-900' : 'bg-slate-100 text-slate-500'}`;
+            document.getElementById('lang-my').className = `text-[10px] font-bold px-3 py-1 rounded-full border ${l==='my' ? 'bg-slate-800 text-white border-slate-900' : 'bg-slate-100 text-slate-500'}`;
+            document.querySelectorAll('[data-lang]').forEach(el => { 
+                const key = el.dataset.lang; 
+                if(LANG[l][key]) { 
+                    if(el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') { el.placeholder = LANG[l][key]; } 
+                    else { el.innerText = LANG[l][key]; } 
+                } 
+            });
+            document.querySelectorAll('[data-ph]').forEach(el => { 
+                const key = el.dataset.ph; 
+                if(LANG[l][key]) el.placeholder = LANG[l][key]; 
+            });
+        }
+    </script>
+</body>
+</html>
